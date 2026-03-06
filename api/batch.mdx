@@ -1,0 +1,528 @@
+---
+title: 'Batch API'
+description: 'Submit and manage batch simulation jobs'
+---
+
+## Overview
+
+The Batch API allows you to submit multiple simulations in a single request. Batches execute simulations in parallel with automatic progress tracking and cost management.
+
+## Batch Features
+
+- **Parallel Execution**: Run multiple simulations simultaneously
+- **Progress Tracking**: Monitor individual job and overall batch progress
+- **Cost Management**: Set budget caps and track actual costs
+- **Fail-Fast Mode**: Stop on first failure or continue
+- **Priority Control**: Set batch priority (0-100)
+
+## Create Batch
+
+Submit a batch of simulations to run. Returns immediately with batch ID.
+
+```bash POST /simulations/batch
+curl -X POST http://localhost:8080/simulations/batch \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "simulations": [
+      {
+        "template_id": "board_meeting",
+        "entity_count": 5,
+        "timepoint_count": 10
+      },
+      {
+        "template_id": "crisis_response",
+        "entity_count": 4,
+        "timepoint_count": 8
+      }
+    ],
+    "parallel_jobs": 2,
+    "fail_fast": false,
+    "budget_cap_usd": 1.00,
+    "priority": 50
+  }'
+```
+
+### Request Body
+
+<ParamField body="simulations" type="array" required>
+  Array of simulation requests (same format as POST /simulations)
+</ParamField>
+
+<ParamField body="parallel_jobs" type="integer" default="3">
+  Number of simulations to run in parallel
+</ParamField>
+
+<ParamField body="fail_fast" type="boolean" default="false">
+  Stop batch on first failure
+</ParamField>
+
+<ParamField body="budget_cap_usd" type="number">
+  Maximum cost for batch (USD)
+</ParamField>
+
+<ParamField body="priority" type="integer" default="50">
+  Batch priority (0-100, higher = more important)
+</ParamField>
+
+<ParamField body="metadata" type="object">
+  Custom metadata
+</ParamField>
+
+### Response
+
+**Status**: `202 Accepted`
+
+<ResponseField name="batch_id" type="string">
+  Unique batch identifier
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Batch status: `PENDING`, `RUNNING`, `PARTIAL`, `COMPLETED`, `FAILED`, or `CANCELLED`
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Creation timestamp
+</ResponseField>
+
+<ResponseField name="priority" type="integer">
+  Batch priority
+</ResponseField>
+
+<ResponseField name="fail_fast" type="boolean">
+  Fail-fast mode enabled
+</ResponseField>
+
+<ResponseField name="parallel_jobs" type="integer">
+  Parallel job limit
+</ResponseField>
+
+<ResponseField name="progress" type="object">
+  Progress tracking
+  <ResponseField name="progress.total_jobs" type="integer">
+    Total jobs in batch
+  </ResponseField>
+  <ResponseField name="progress.pending_jobs" type="integer">
+    Jobs pending
+  </ResponseField>
+  <ResponseField name="progress.running_jobs" type="integer">
+    Jobs running
+  </ResponseField>
+  <ResponseField name="progress.completed_jobs" type="integer">
+    Jobs completed
+  </ResponseField>
+  <ResponseField name="progress.failed_jobs" type="integer">
+    Jobs failed
+  </ResponseField>
+  <ResponseField name="progress.cancelled_jobs" type="integer">
+    Jobs cancelled
+  </ResponseField>
+  <ResponseField name="progress.progress_percent" type="integer">
+    Overall progress percentage
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="cost" type="object">
+  Cost tracking
+  <ResponseField name="cost.estimated_cost_usd" type="number">
+    Estimated cost
+  </ResponseField>
+  <ResponseField name="cost.actual_cost_usd" type="number">
+    Actual cost so far
+  </ResponseField>
+  <ResponseField name="cost.budget_cap_usd" type="number">
+    Budget cap (if set)
+  </ResponseField>
+  <ResponseField name="cost.budget_remaining_usd" type="number">
+    Remaining budget
+  </ResponseField>
+  <ResponseField name="cost.tokens_used" type="integer">
+    Tokens used
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="job_ids" type="array">
+  Array of created job IDs
+</ResponseField>
+
+```json
+{
+  "batch_id": "batch-abc123def456",
+  "status": "PENDING",
+  "created_at": "2026-03-06T12:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "priority": 50,
+  "fail_fast": false,
+  "parallel_jobs": 2,
+  "progress": {
+    "total_jobs": 2,
+    "pending_jobs": 2,
+    "running_jobs": 0,
+    "completed_jobs": 0,
+    "failed_jobs": 0,
+    "cancelled_jobs": 0,
+    "progress_percent": 0
+  },
+  "cost": {
+    "estimated_cost_usd": 0.10,
+    "actual_cost_usd": 0.0,
+    "budget_cap_usd": 1.00,
+    "budget_remaining_usd": 1.00,
+    "tokens_used": 0
+  },
+  "job_ids": ["job-001", "job-002"],
+  "error_message": null,
+  "owner_id": "user-123",
+  "metadata": null
+}
+```
+
+### Batch Size Limits
+
+| Tier | Max Batch Size |
+|------|----------------|
+| Free | 5 |
+| Basic | 20 |
+| Pro | 50 |
+| Enterprise | 100 |
+
+## Get Batch Status
+
+Get details about a specific batch.
+
+```bash GET /simulations/batch/{batch_id}
+curl -X GET http://localhost:8080/simulations/batch/batch-abc123def456 \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+Returns batch object with updated progress and status.
+
+### Errors
+
+- `404 Not Found` - Batch doesn't exist
+- `403 Forbidden` - Not the batch owner
+
+## Get Batch with Jobs
+
+Get batch details including all individual job details.
+
+```bash GET /simulations/batch/{batch_id}/jobs
+curl -X GET http://localhost:8080/simulations/batch/batch-abc123def456/jobs \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="batch" type="object">
+  Batch metadata
+</ResponseField>
+
+<ResponseField name="jobs" type="array">
+  Array of job objects with full details
+</ResponseField>
+
+```json
+{
+  "batch": {
+    "batch_id": "batch-abc123def456",
+    "status": "RUNNING",
+    "progress": {
+      "total_jobs": 2,
+      "completed_jobs": 1,
+      "running_jobs": 1,
+      "progress_percent": 50
+    }
+  },
+  "jobs": [
+    {
+      "job_id": "job-001",
+      "status": "COMPLETED",
+      "template_id": "board_meeting",
+      "cost_usd": 0.05,
+      "completed_at": "2026-03-06T12:05:00Z"
+    },
+    {
+      "job_id": "job-002",
+      "status": "RUNNING",
+      "template_id": "crisis_response",
+      "progress_percent": 60
+    }
+  ]
+}
+```
+
+## List Batches
+
+List your batch jobs with optional filtering.
+
+```bash GET /simulations/batch
+curl -X GET "http://localhost:8080/simulations/batch?status=RUNNING&page=1" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="status" type="string">
+  Filter by status
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number
+</ParamField>
+
+<ParamField query="page_size" type="integer" default="20">
+  Batches per page (1-100)
+</ParamField>
+
+### Response
+
+<ResponseField name="batches" type="array">
+  Array of batch objects
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total batch count
+</ResponseField>
+
+<ResponseField name="page" type="integer">
+  Current page
+</ResponseField>
+
+<ResponseField name="page_size" type="integer">
+  Page size
+</ResponseField>
+
+## Cancel Batch
+
+Cancel a running or pending batch.
+
+```bash POST /simulations/batch/{batch_id}/cancel
+curl -X POST http://localhost:8080/simulations/batch/batch-abc123def456/cancel \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "No longer needed",
+    "cancel_running": true
+  }'
+```
+
+### Request Body
+
+<ParamField body="reason" type="string">
+  Cancellation reason (optional)
+</ParamField>
+
+<ParamField body="cancel_running" type="boolean" default="true">
+  Whether to cancel currently running jobs
+</ParamField>
+
+### Response
+
+Returns batch object with status `CANCELLED`.
+
+## Get Batch Statistics
+
+Get statistics about your batches.
+
+```bash GET /simulations/batch/stats
+curl -X GET http://localhost:8080/simulations/batch/stats \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="total_batches" type="integer">
+  Total batches created
+</ResponseField>
+
+<ResponseField name="pending" type="integer">
+  Batches pending
+</ResponseField>
+
+<ResponseField name="running" type="integer">
+  Batches running
+</ResponseField>
+
+<ResponseField name="completed" type="integer">
+  Batches completed
+</ResponseField>
+
+<ResponseField name="failed" type="integer">
+  Batches failed
+</ResponseField>
+
+<ResponseField name="cancelled" type="integer">
+  Batches cancelled
+</ResponseField>
+
+<ResponseField name="total_jobs" type="integer">
+  Total jobs across all batches
+</ResponseField>
+
+<ResponseField name="total_cost_usd" type="number">
+  Total cost
+</ResponseField>
+
+<ResponseField name="total_tokens" type="integer">
+  Total tokens used
+</ResponseField>
+
+## Get Usage Status
+
+Get current usage and quota status.
+
+```bash GET /simulations/batch/usage
+curl -X GET http://localhost:8080/simulations/batch/usage \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="user_id" type="string">
+  Your user ID
+</ResponseField>
+
+<ResponseField name="tier" type="string">
+  Your subscription tier
+</ResponseField>
+
+<ResponseField name="period" type="string">
+  Current billing period (YYYY-MM)
+</ResponseField>
+
+<ResponseField name="days_remaining" type="integer">
+  Days remaining in period
+</ResponseField>
+
+<ResponseField name="api_calls_used" type="integer">
+  API calls used this month
+</ResponseField>
+
+<ResponseField name="simulations_used" type="integer">
+  Simulations run this month
+</ResponseField>
+
+<ResponseField name="cost_used_usd" type="number">
+  Cost accumulated this month
+</ResponseField>
+
+<ResponseField name="tokens_used" type="integer">
+  Tokens used this month
+</ResponseField>
+
+<ResponseField name="api_calls_limit" type="integer">
+  API calls limit (-1 = unlimited)
+</ResponseField>
+
+<ResponseField name="simulations_limit" type="integer">
+  Simulations limit (-1 = unlimited)
+</ResponseField>
+
+<ResponseField name="cost_limit_usd" type="number">
+  Cost limit (-1 = unlimited)
+</ResponseField>
+
+<ResponseField name="max_batch_size" type="integer">
+  Maximum batch size
+</ResponseField>
+
+<ResponseField name="api_calls_remaining" type="integer">
+  Remaining API calls
+</ResponseField>
+
+<ResponseField name="simulations_remaining" type="integer">
+  Remaining simulations
+</ResponseField>
+
+<ResponseField name="cost_remaining_usd" type="number">
+  Remaining budget
+</ResponseField>
+
+<ResponseField name="is_quota_exceeded" type="boolean">
+  Whether any quota is exceeded
+</ResponseField>
+
+<ResponseField name="quota_exceeded_reason" type="string">
+  Reason for quota exceeded (if applicable)
+</ResponseField>
+
+```json
+{
+  "user_id": "user-123",
+  "tier": "pro",
+  "period": "2026-03",
+  "days_remaining": 25,
+  "api_calls_used": 5432,
+  "simulations_used": 127,
+  "cost_used_usd": 6.35,
+  "tokens_used": 158750,
+  "api_calls_limit": 100000,
+  "simulations_limit": 1000,
+  "cost_limit_usd": 100.00,
+  "max_batch_size": 50,
+  "api_calls_remaining": 94568,
+  "simulations_remaining": 873,
+  "cost_remaining_usd": 93.65,
+  "is_quota_exceeded": false,
+  "quota_exceeded_reason": null
+}
+```
+
+## Get Usage History
+
+Get usage history for past billing periods.
+
+```bash GET /simulations/batch/usage/history
+curl -X GET "http://localhost:8080/simulations/batch/usage/history?periods=6" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="periods" type="integer" default="6">
+  Number of past periods to retrieve
+</ParamField>
+
+### Response
+
+<ResponseField name="current" type="object">
+  Current period usage (same as /usage)
+</ResponseField>
+
+<ResponseField name="history" type="array">
+  Array of historical period usage
+</ResponseField>
+
+```json
+{
+  "current": {
+    "period": "2026-03",
+    "api_calls_used": 5432,
+    "simulations_used": 127,
+    "cost_used_usd": 6.35
+  },
+  "history": [
+    {
+      "period": "2026-02",
+      "api_calls": 8521,
+      "simulations_run": 203,
+      "simulations_completed": 198,
+      "simulations_failed": 5,
+      "cost_usd": 10.15,
+      "tokens_used": 253750
+    },
+    {
+      "period": "2026-01",
+      "api_calls": 7834,
+      "simulations_run": 187,
+      "simulations_completed": 183,
+      "simulations_failed": 4,
+      "cost_usd": 9.35,
+      "tokens_used": 233750
+    }
+  ]
+}
+```

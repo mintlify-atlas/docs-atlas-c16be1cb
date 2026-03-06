@@ -1,0 +1,510 @@
+---
+title: run.sh Command
+description: Execute simulations using the Timepoint Pro run script
+---
+
+The `run.sh` script is the single entry point for all Timepoint Pro simulation operations.
+
+## Quick Start
+
+```bash
+# List all available templates
+./run.sh list
+
+# Run a single template
+./run.sh run board_meeting
+
+# Run by tier
+./run.sh quick
+
+# Show recent runs
+./run.sh status
+```
+
+## Basic Usage
+
+```bash
+./run.sh <command> [options]
+./run.sh <preset>              # Quick shortcuts
+./run.sh <template_name>       # Direct template execution
+```
+
+## Run Command
+
+Execute simulations with the `run` command:
+
+```bash
+./run.sh run [TEMPLATE|PRESET] [OPTIONS]
+```
+
+### Selection Options
+
+<ParamField path="--template" type="string">
+  Run a specific template by name
+  
+  ```bash
+  ./run.sh run --template board_meeting
+  # Or use shortcut:
+  ./run.sh run board_meeting
+  ```
+</ParamField>
+
+<ParamField path="--tier" type="string">
+  Filter by complexity tier: `quick`, `standard`, or `comprehensive`
+  
+  ```bash
+  ./run.sh run --tier quick
+  ```
+</ParamField>
+
+<ParamField path="--category" type="string">
+  Filter by category: `showcase`, `persona`, or `convergence`
+  
+  ```bash
+  ./run.sh run --category showcase
+  ```
+</ParamField>
+
+<ParamField path="--mechanism" type="string">
+  Filter by mechanism tags (comma-separated)
+  
+  ```bash
+  ./run.sh run --mechanism M1,M7,M11
+  ```
+</ParamField>
+
+### Execution Options
+
+<ParamField path="--parallel" type="number" default="1">
+  Run N templates concurrently
+  
+  ```bash
+  ./run.sh run --tier quick --parallel 4
+  ```
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean">
+  Show cost estimate without running
+  
+  ```bash
+  ./run.sh run board_meeting --dry-run
+  ```
+</ParamField>
+
+<ParamField path="--skip-summaries" type="boolean">
+  Skip LLM summary generation (faster, cheaper)
+  
+  ```bash
+  ./run.sh run quick --skip-summaries
+  ```
+</ParamField>
+
+<ParamField path="--budget" type="number">
+  Stop if cost exceeds budget (USD)
+  
+  ```bash
+  ./run.sh run --category showcase --budget 5.00
+  ```
+</ParamField>
+
+### Model Options
+
+<ParamField path="--model" type="string">
+  Override LLM model for all calls
+  
+  ```bash
+  ./run.sh run board_meeting --model deepseek/deepseek-chat
+  ```
+</ParamField>
+
+<ParamField path="--free" type="boolean">
+  Use best quality free model ($0 cost)
+  
+  ```bash
+  ./run.sh run --free board_meeting
+  ```
+</ParamField>
+
+<ParamField path="--free-fast" type="boolean">
+  Use fastest free model ($0 cost)
+  
+  ```bash
+  ./run.sh run --free-fast quick
+  ```
+</ParamField>
+
+<ParamField path="--gemini-flash" type="boolean">
+  Use Google Gemini 3 Flash (1M context, fast inference)
+  
+  ```bash
+  ./run.sh run --gemini-flash board_meeting
+  ```
+</ParamField>
+
+<ParamField path="--groq" type="boolean">
+  Use Groq Llama 3.3 70B (~300 tok/s, best quality)
+  
+  ```bash
+  ./run.sh run --groq board_meeting
+  ```
+  
+  Requires `GROQ_API_KEY` in `.env`
+</ParamField>
+
+<ParamField path="--fast" type="boolean">
+  Use Mixtral 8x7B (~200 tok/s, fastest)
+  
+  ```bash
+  ./run.sh run --fast quick
+  ```
+</ParamField>
+
+## Presets
+
+Quick shortcuts for running template groups:
+
+<Tabs>
+  <Tab title="quick">
+    Run all quick-tier templates (~30s-2min, less than $0.05 each)
+    
+    ```bash
+    ./run.sh quick
+    ```
+  </Tab>
+  
+  <Tab title="standard">
+    Run all standard-tier templates (~2-5 min, $0.05-0.20)
+    
+    ```bash
+    ./run.sh standard
+    ```
+  </Tab>
+  
+  <Tab title="comprehensive">
+    Run all comprehensive templates (~5-15 min, $0.20-1.00)
+    
+    ```bash
+    ./run.sh comprehensive
+    ```
+  </Tab>
+  
+  <Tab title="showcase">
+    Run production-ready showcase scenarios
+    
+    ```bash
+    ./run.sh showcase
+    ```
+  </Tab>
+</Tabs>
+
+## Template Listing
+
+View available templates with metadata:
+
+```bash
+./run.sh list
+```
+
+<CodeGroup>
+```bash Terminal Output
+================================================================================
+TEMPLATE CATALOG
+================================================================================
+ID                                       TIER           CATEGORY     MECHANISMS
+--------------------------------------------------------------------------------
+showcase/board_meeting                   standard       showcase     M1, M7, M11, M13
+showcase/jefferson_dinner                standard       showcase     M3, M7, M11, M13
+showcase/hospital_crisis                 standard       showcase     M8, M14
+showcase/detective_prospection           standard       showcase     M15, M7
+showcase/kami_shrine                     standard       showcase     M16
+showcase/sec_investigation               comprehensive  showcase     M3, M7, M19
+showcase/castaway_colony_branching       comprehensive  showcase     M1-M19 (all)
+convergence/simple                       quick          convergence  M7, M11
+convergence/standard                     standard       convergence  M7, M11, M13
+...
+--------------------------------------------------------------------------------
+Total: 21 templates
+```
+</CodeGroup>
+
+### Filter by Category
+
+```bash
+# Show only showcase templates
+./run.sh list --category showcase
+
+# Show only convergence tests
+./run.sh list --category convergence
+
+# Show only quick tier
+./run.sh list --tier quick
+```
+
+### List Patches
+
+View template patches from SYNTH.md:
+
+```bash
+# List all patch categories
+./run.sh list patches
+
+# List patches in specific category
+./run.sh list patches corporate
+./run.sh list patches historical
+./run.sh list patches crisis
+```
+
+**Available patch categories:**
+- `corporate` - Business/startup scenarios
+- `historical` - Historical events
+- `crisis` - High-stakes emergency scenarios
+- `mystical` - Spiritual/animistic scenarios
+- `mystery` - Detective/investigation scenarios
+- `mechanism` - Core mechanism isolation tests
+- `portal` - Backward reasoning scenarios
+- `stress` - High-complexity stress tests
+- `convergence` - Consistency evaluation tests
+
+## Portal Testing Modes
+
+Backward reasoning from known outcomes:
+
+<ParamField path="--portal-all" type="boolean">
+  Run all portal testing modes
+</ParamField>
+
+<ParamField path="--portal-test-only" type="boolean">
+  Basic portal test
+</ParamField>
+
+<ParamField path="--portal-simjudged-quick" type="boolean">
+  Quick simjudged portal (5 steps)
+</ParamField>
+
+<ParamField path="--portal-simjudged" type="boolean">
+  Standard simjudged portal
+</ParamField>
+
+<ParamField path="--portal-simjudged-thorough" type="boolean">
+  Thorough simjudged portal (10 steps, ~$0.50-1.00, 60-90 min)
+</ParamField>
+
+```bash
+# Quick portal demo
+./run.sh run --portal-quick board_meeting
+
+# All portal modes
+./run.sh run --portal-all
+
+# Thorough backward reasoning
+./run.sh run --portal-simjudged-thorough mars_mission_portal
+```
+
+## Convergence Testing
+
+Run templates multiple times to test consistency:
+
+<ParamField path="--convergence" type="boolean">
+  Run convergence analysis after execution
+</ParamField>
+
+<ParamField path="--convergence-runs" type="number" default="3">
+  Number of runs for analysis
+</ParamField>
+
+<ParamField path="--convergence-e2e" type="boolean">
+  Run template N times + analyze
+</ParamField>
+
+```bash
+# Run template 3 times and analyze
+./run.sh run --convergence-e2e board_meeting
+
+# Run 5 times
+./run.sh run --convergence-e2e --convergence-runs 5 convergence_simple
+
+# View convergence history
+./run.sh convergence history
+```
+
+## Natural Language Mode
+
+Generate simulations from natural language descriptions:
+
+<ParamField path="--nl" type="string">
+  Natural language simulation prompt
+</ParamField>
+
+<ParamField path="--nl-entities" type="number" default="4">
+  Number of entities to generate
+</ParamField>
+
+<ParamField path="--nl-timepoints" type="number" default="3">
+  Number of timepoints to generate
+</ParamField>
+
+```bash
+# Generate from prompt
+./run.sh run --nl "emergency board meeting about merger"
+
+# Specify entity and timepoint count
+./run.sh run --nl "detective interrogates 3 witnesses" --nl-entities 4 --nl-timepoints 5
+```
+
+## Status and Export
+
+### View Run Status
+
+```bash
+# Show latest run
+./run.sh status
+
+# Show specific run
+./run.sh status run_20241207_123456
+
+# Show full details
+./run.sh status --full
+```
+
+<CodeGroup>
+```bash Terminal Output
+Run ID:     run_20241207_123456
+Status:     completed
+Template:   board_meeting
+Started:    2024-12-07 12:34:56
+Duration:   127s
+Cost:       $0.0234
+Tokens:     1,245
+LLM Calls:  15
+Entities:   4
+Timepoints: 3
+```
+</CodeGroup>
+
+### Export Results
+
+```bash
+# Export latest run as markdown
+./run.sh export last
+
+# Export as JSON
+./run.sh export last --format json
+
+# Export specific run
+./run.sh export run_20241207_123456 --output ./results
+```
+
+## API Mode
+
+Submit jobs via REST API:
+
+<ParamField path="--api" type="boolean">
+  Submit via REST API
+</ParamField>
+
+<ParamField path="--api-url" type="string" default="http://localhost:8080">
+  API base URL
+</ParamField>
+
+<ParamField path="--api-key" type="string">
+  API authentication key
+</ParamField>
+
+<ParamField path="--api-wait" type="boolean">
+  Wait for job completion
+</ParamField>
+
+```bash
+# Start API server
+./run.sh dashboard
+
+# Submit via API
+./run.sh run --api board_meeting
+
+# Submit and wait
+./run.sh run --api --api-wait --api-key your_key board_meeting
+```
+
+## Examples
+
+<CodeGroup>
+```bash Basic
+# Run single template
+./run.sh board_meeting
+
+# Run by tier with parallelism
+./run.sh run --tier quick --parallel 4
+
+# Run by category
+./run.sh run --category showcase
+```
+
+```bash Free Models
+# Best free model
+./run.sh run --free board_meeting
+
+# Fastest free model
+./run.sh run --free-fast quick
+
+# List free models
+./run.sh run --list-free-models
+```
+
+```bash Fast Inference
+# Groq Llama 3.3 70B (~300 tok/s)
+./run.sh run --groq board_meeting
+
+# Fastest model (~200 tok/s)
+./run.sh run --fast quick
+
+# Gemini Flash (1M context)
+./run.sh run --gemini-flash board_meeting
+```
+
+```bash Portal Testing
+# Quick portal demo (5 timepoints)
+./run.sh run --portal-quick board_meeting
+
+# All portal modes
+./run.sh run --portal-all
+
+# Thorough simjudged
+./run.sh run --portal-simjudged-thorough
+```
+
+```bash Convergence
+# Run 3 times and analyze
+./run.sh convergence e2e board_meeting
+
+# Run 5 times
+./run.sh convergence e2e --runs 5 convergence_simple
+
+# View history
+./run.sh convergence history
+```
+
+```bash Natural Language
+# Generate from prompt
+./run.sh run --nl "startup board meeting about pivoting"
+
+# With custom counts
+./run.sh run --nl "apollo 13 crisis" --nl-entities 5 --nl-timepoints 7
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Training" icon="graduation-cap" href="./train">
+    Train entities with historical context
+  </Card>
+  <Card title="Interactive Queries" icon="terminal" href="./interactive">
+    Query simulation results
+  </Card>
+  <Card title="Evaluation" icon="chart-bar" href="./evaluate">
+    Understand evaluation metrics
+  </Card>
+  <Card title="CLI Overview" icon="terminal" href="./overview">
+    Back to CLI overview
+  </Card>
+</CardGroup>

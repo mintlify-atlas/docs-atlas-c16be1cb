@@ -1,0 +1,378 @@
+---
+title: 'Orchestrator'
+description: 'Scene-to-specification compiler that converts natural language to complete simulation specs'
+icon: 'wand-magic-sparkles'
+---
+
+## Overview
+
+The `OrchestratorAgent` transforms natural language event descriptions into complete scene specifications ready for simulation. It handles entity rosters, timepoint sequences, relationship graphs, and initial knowledge seeding.
+
+**Module:** `orchestrator.py`
+
+**Architecture:**
+```
+SceneParser → KnowledgeSeeder → RelationshipExtractor → ResolutionAssigner
+     ↓              ↓                    ↓                      ↓
+  Generate      Seed initial        Build social        Assign resolution
+   entities      knowledge          network graph       levels by role
+```
+
+## Core Components
+
+### OrchestratorAgent
+
+Top-level coordinator for scene-to-simulation compilation.
+
+**Signature:**
+```python
+class OrchestratorAgent:
+    def __init__(self, llm_client: LLMClient, store: GraphStore)
+```
+
+**Main Method:**
+```python
+@track_mechanism("M17", "modal_temporal_causality")
+def orchestrate(
+    self,
+    event_description: str,
+    context: dict | None = None,
+    save_to_db: bool = True
+) -> dict[str, Any]
+```
+
+**Parameters:**
+- `event_description`: Natural language like "simulate the constitutional convention"
+- `context`: Optional context (temporal_mode, max_entities, max_timepoints, etc.)
+- `save_to_db`: Whether to save entities/timepoints to database
+
+**Returns:**
+Dictionary containing:
+- `specification`: Complete `SceneSpecification`
+- `entities`: List of populated `Entity` objects
+- `timepoints`: List of `Timepoint` objects
+- `graph`: NetworkX relationship graph
+- `exposure_events`: Initial knowledge exposure events
+- `temporal_agent`: Configured `TemporalAgent` for the scene
+
+**Example:**
+```python
+from llm_v2 import LLMClient
+from storage import GraphStore
+from orchestrator import OrchestratorAgent
+
+# Initialize
+llm = LLMClient.from_hydra_config(cfg)
+store = GraphStore("sqlite:///timepoint.db")
+orchestrator = OrchestratorAgent(llm, store)
+
+# Orchestrate scene
+result = orchestrator.orchestrate(
+    "simulate the constitutional convention",
+    context={
+        "max_entities": 20,
+        "max_timepoints": 10,
+        "temporal_mode": "forward"
+    }
+)
+
+print(f"Generated {len(result['entities'])} entities")
+print(f"Created {len(result['timepoints'])} timepoints")
+```
+
+## SceneParser
+
+Parses natural language into structured scene specification.
+
+**Signature:**
+```python
+class SceneParser:
+    def __init__(self, llm_client: LLMClient)
+    
+    def parse(
+        self,
+        event_description: str,
+        context: dict | None = None
+    ) -> SceneSpecification
+```
+
+**Strategy Selection:**
+- **Single-pass**: For scenarios with under 40 entities and under 80 timepoints
+- **Chunked generation**: For large scenarios (multi-pass hierarchical generation)
+
+**Chunked Generation Flow:**
+```
+Pass 1: Generate entity roster (names, roles, types)
+Pass 2: Generate timepoint skeleton (ids, timestamps, causal chain)
+Pass 3: Fill entity details in batches (knowledge, relationships)
+Pass 4: Fill timepoint details in batches (descriptions, participants)
+```
+
+**Configuration:**
+```python
+context = {
+    "max_entities": 124,           # Maximum entities to generate
+    "max_timepoints": 200,         # Maximum timepoints to generate
+    "temporal_mode": "forward",    # Temporal mode
+    "require_exact_counts": False, # Force exact counts (MAX mode)
+    "entity_config": {
+        "profiles": [              # Predefined entity profiles
+            "profiles/founder.json",
+            "profiles/investor.json"
+        ]
+    }
+}
+```
+
+## KnowledgeSeeder
+
+Seeds initial entity knowledge states from scene specification.
+
+**Signature:**
+```python
+class KnowledgeSeeder:
+    def __init__(self, store: GraphStore)
+    
+    @track_mechanism("M3", "exposure_event_tracking")
+    def seed_knowledge(
+        self,
+        spec: SceneSpecification,
+        create_exposure_events: bool = True
+    ) -> dict[str, list[ExposureEvent]]
+```
+
+**Returns:** Dictionary mapping entity_id to list of initial `ExposureEvent` records
+
+**Example:**
+```python
+seeder = KnowledgeSeeder(store)
+exposure_map = seeder.seed_knowledge(
+    spec,
+    create_exposure_events=True
+)
+
+for entity_id, events in exposure_map.items():
+    print(f"{entity_id}: {len(events)} knowledge items")
+```
+
+## RelationshipExtractor
+
+Builds social/spatial relationship graph from entity specifications.
+
+**Signature:**
+```python
+class RelationshipExtractor:
+    @track_mechanism("M1", "heterogeneous_fidelity_graph")
+    def build_graph(self, spec: SceneSpecification) -> nx.Graph
+```
+
+**Graph Structure:**
+- **Nodes:** entity_ids with metadata (type, role, description)
+- **Edges:** Relationships with types (ally, rival, mentor) and weights
+- **Co-presence edges:** Entities present at same timepoints
+
+**Relationship Weights:**
+```python
+weights = {
+    "family": 0.95,
+    "ally": 0.9,
+    "mentor": 0.85,
+    "friend": 0.8,
+    "student": 0.75,
+    "colleague": 0.7,
+    "acquaintance": 0.5,
+    "neutral": 0.3,
+    "rival": 0.2,
+    "enemy": 0.1
+}
+```
+
+## ResolutionAssigner
+
+Assigns resolution levels to entities based on roles and centrality.
+
+**Signature:**
+```python
+class ResolutionAssigner:
+    @track_mechanism("M1", "heterogeneous_fidelity_resolution")
+    def assign_resolutions(
+        self,
+        spec: SceneSpecification,
+        graph: nx.Graph
+    ) -> tuple[dict[str, ResolutionLevel], float]
+```
+
+**Returns:**
+- Dictionary mapping entity_id to `ResolutionLevel`
+- Estimated cost (USD) for the simulation
+
+**Assignment Strategy:**
+
+| Role | Centrality | Resolution |
+|------|------------|------------|
+| primary | over 0.5 | TRAINED |
+| primary | under 0.5 | DIALOG |
+| secondary | over 0.3 | DIALOG |
+| secondary | under 0.3 | GRAPH |
+| background | any | SCENE |
+| environment | any | TENSOR_ONLY |
+
+**Cost Estimation:**
+```python
+cost_per_level = {
+    ResolutionLevel.TRAINED: 0.50,      # Model training
+    ResolutionLevel.DIALOG: 0.15,       # Dialog synthesis
+    ResolutionLevel.GRAPH: 0.05,        # Graph processing
+    ResolutionLevel.SCENE: 0.02,        # Scene aggregation
+    ResolutionLevel.TENSOR_ONLY: 0.005  # Tensor compression
+}
+```
+
+## Data Schemas
+
+### SceneSpecification
+
+```python
+class SceneSpecification(BaseModel):
+    scene_title: str
+    scene_description: str
+    temporal_mode: str  # "forward", "directorial", "branching", etc.
+    temporal_scope: dict[str, str]  # start_date, end_date, location
+    entities: list[EntityRosterItem]
+    timepoints: list[TimepointSpec]
+    global_context: str
+```
+
+### EntityRosterItem
+
+```python
+class EntityRosterItem(BaseModel):
+    entity_id: str
+    entity_type: str = "human"
+    role: str  # "primary", "secondary", "background", "environment"
+    description: str
+    initial_knowledge: list[str] = []
+    relationships: dict[str, str] = {}  # entity_id -> relationship_type
+```
+
+### TimepointSpec
+
+```python
+class TimepointSpec(BaseModel):
+    timepoint_id: str
+    timestamp: str  # ISO format datetime
+    event_description: str
+    entities_present: list[str]
+    importance: float = 0.5  # 0.0-1.0
+    causal_parent: str | None = None
+```
+
+## Model Selection
+
+Automatic model selection based on scenario size:
+
+**Standard scenarios** (under 50k estimated tokens):
+- Uses **Llama 4 Scout** (327K context, 42K output limit)
+- 2x safety margin for token allocation
+
+**Large scenarios** (>50k estimated tokens):
+- Uses **Llama 405B** (100K output limit)
+- 1.5x safety margin for token allocation
+
+**Token estimation:**
+```python
+estimated_tokens = (max_entities * 150) + (max_timepoints * 200) + 2000
+max_output_tokens = min(int(estimated_tokens * 2.0), 42000)
+```
+
+## Error Handling
+
+**Timeout errors:**
+- API request timed out
+- Solutions: Retry, reduce scale, use faster model
+
+**JSON parsing errors:**
+- Response truncated or malformed
+- Solutions: Reduce scale, check logs, avoid MAX mode
+
+**Validation errors:**
+- Schema mismatch or missing fields
+- Solutions: Check logs, retry, report if consistent
+
+## Configuration Options
+
+**Temporal Modes:**
+- `forward`: Standard causality (default)
+- `directorial`: Narrative focus with dramatic structure
+- `branching`: Counterfactual what-if scenarios
+- `cyclical`: Time loops and prophecy
+- `portal`: Backward inference from endpoint
+
+**Entity Configuration:**
+```python
+context = {
+    "entity_config": {
+        "profiles": ["path/to/profile.json"],  # Predefined profiles
+    },
+    "max_entities": 20,
+    "max_timepoints": 10,
+    "temporal_mode": "forward",
+    "require_exact_counts": False  # Use MAX mode
+}
+```
+
+**Profile Format:**
+```json
+{
+  "name": "Alexander Hamilton",
+  "description": "First Secretary of Treasury",
+  "archetype_id": "politician",
+  "strengths": ["Financial expertise", "Persuasive writing"],
+  "weaknesses": ["Impulsive", "Combative"],
+  "initial_knowledge": [
+    "Served as first Secretary of the Treasury",
+    "Advocated for strong central government"
+  ]
+}
+```
+
+## Integration with Workflows
+
+**Feed to Entity Training:**
+```python
+from workflows import create_entity_training_workflow
+
+workflow = create_entity_training_workflow(llm, store)
+state = {
+    "graph": result['graph'],
+    "entities": result['entities'],
+    "timepoint": result['timepoints'][0].timepoint_id,
+    "resolution": ResolutionLevel.DIALOG
+}
+final_state = workflow.invoke(state)
+```
+
+**Feed to TemporalAgent:**
+```python
+from workflows import TemporalAgent
+
+temporal_agent = result['temporal_agent']
+paths = temporal_agent.run(result['specification'])
+```
+
+## Best Practices
+
+1. **Use chunked generation** for >40 entities or >80 timepoints
+2. **Provide temporal_mode** for mode-specific affordances
+3. **Load predefined profiles** for key characters
+4. **Set token budgets** for cost control
+5. **Check exposure events** for knowledge provenance
+6. **Validate graph structure** before simulation
+7. **Monitor cost estimates** before large runs
+
+## Related
+
+- [LLM Client](/python/llm-client) - LLM integration
+- [Storage](/python/storage) - Database persistence
+- [Workflows](/python/workflows) - Entity training workflows
+- [Schemas](/python/schemas) - Data models

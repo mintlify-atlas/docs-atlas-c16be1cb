@@ -1,0 +1,670 @@
+---
+title: 'Your First Simulation'
+description: 'Walk through running a template, understanding output, and basic customization'
+---
+
+## Overview
+
+In this guide, you'll:
+
+1. Run a production template (board meeting simulation)
+2. Understand every piece of output
+3. Explore temporal modes
+4. Customize parameters
+5. Export and analyze results
+
+<Info>
+**Time:** 15 minutes | **Cost:** ~$0.08 | **Prerequisites:** [Installation complete](/installation)
+</Info>
+
+## Choose Your Template
+
+Timepoint Pro includes 21 production templates. Let's start with `board_meeting` - a showcase scenario demonstrating core mechanisms.
+
+### List Available Templates
+
+```bash
+./run.sh list
+```
+
+**Output:**
+
+```bash
+================================================================================
+TEMPLATE CATALOG
+================================================================================
+ID                                       TIER           CATEGORY     MECHANISMS
+--------------------------------------------------------------------------------
+showcase/board_meeting                   standard       showcase     M1, M7, M11 +1
+showcase/jefferson_dinner                standard       showcase     M3, M7, M11 +1
+showcase/mars_mission_portal             comprehensive  showcase     M17, M3, M7 +3
+showcase/castaway_colony_branching       comprehensive  showcase     M1, M2, M3 +15
+convergence/simple                       quick          convergence  M7, M11
+...
+--------------------------------------------------------------------------------
+Total: 21 templates
+```
+
+### Template Tiers
+
+<CardGroup cols={3}>
+  <Card title="Quick" icon="bolt">
+    **Fast tests**
+    - ~30s-2min runtime
+    - Less than $0.05 per run
+    - Minimal entities/timepoints
+  </Card>
+  <Card title="Standard" icon="gauge">
+    **Moderate tests**
+    - ~2-5 min runtime
+    - $0.05-0.20 per run
+    - Balanced complexity
+  </Card>
+  <Card title="Comprehensive" icon="chart-line">
+    **Thorough tests**
+    - ~5-15 min runtime
+    - $0.20-1.00 per run
+    - Rich causal structure
+  </Card>
+</CardGroup>
+
+## Run the Board Meeting Template
+
+<Steps>
+  <Step title="Ensure environment is loaded">
+    ```bash
+    export $(cat .env | xargs)
+    ```
+  </Step>
+
+  <Step title="Run the template">
+    ```bash
+    ./run.sh run board_meeting
+    ```
+
+    Or use the shortcut:
+
+    ```bash
+    ./run.sh board_meeting
+    ```
+  </Step>
+
+  <Step title="Watch the output">
+    You'll see real-time progress:
+
+    ```bash
+    [Waveform] Scheduler initialized with 4 entity envelopes
+    [Waveform] Resolution schedule covers 40 (entity, timepoint) pairs
+    [Waveform] Skipping dialog for tp_003 (all entities in TENSOR band)
+    Generating dialog for tp_004 with 3 entities...
+
+    [ADPRS Shadow Report]
+      Total evaluations:  40
+      Divergent:          3 (7.5%)
+      Mean divergence:    0.12
+      Max divergence:     0.35
+
+    [ADPRS Fit] Fitted 4 entities:
+      cmdr_tanaka: A=0.820 P=2.000 S=0.710 baseline=0.145 (cold, converged, MSE=0.00234)
+    ```
+
+    <Info>
+    **What the metrics mean:**
+    - **Waveform schedule**: Maps each (entity, timepoint) pair to resolution band (TENSOR/SCENE/DIALOG)
+    - **Shadow report**: Compares ADPRS predictions to actual resolution choices
+    - **WSR (Waveform Sufficiency Ratio)**: `correct_predictions / total_predictions`. Target: >0.7
+    - **Divergent**: Low divergence = good predictions. Target: under 15%
+    </Info>
+  </Step>
+
+  <Step title="Wait for completion">
+    Runtime: ~2-3 minutes for `board_meeting`
+
+    Final output:
+
+    ```bash
+    ================================================================================
+    Execution Complete
+    ================================================================================
+    [OK] Check ./run.sh status for results
+    ```
+  </Step>
+</Steps>
+
+## Understand the Output
+
+### Check Run Status
+
+```bash
+./run.sh status
+```
+
+**Output:**
+
+```bash
+Run ID:     run_20260306_143022_abc12345
+Status:     completed
+Template:   board_meeting
+Started:    2026-03-06 14:30:22
+Duration:   127s
+Cost:       $0.0823
+Tokens:     89,234
+LLM Calls:  47
+Entities:   4
+Timepoints: 5
+```
+
+### Explore Output Files
+
+Navigate to `output/simulations/`:
+
+```bash
+cd output/simulations
+ls -lh
+```
+
+**You'll find:**
+
+<CodeGroup>
+```bash Summary JSON
+summary_20260306_143022.json
+```
+
+```bash Entity Data (JSONL)
+entities_20260306_143022.jsonl
+```
+
+```bash SQLite Database
+sim_20260306_143022.db
+```
+
+```bash Training Data (if applicable)
+training_20260306_143022.jsonl
+```
+</CodeGroup>
+
+### Summary JSON Structure
+
+```json summary_20260306_143022.json
+{
+  "run_id": "run_20260306_143022_abc12345",
+  "template_id": "board_meeting",
+  "status": "completed",
+  "started_at": "2026-03-06T14:30:22Z",
+  "cost_usd": 0.0823,
+  "tokens_used": 89234,
+  "llm_calls": 47,
+  "entities": [
+    {
+      "entity_id": "ceo_alice",
+      "type": "human",
+      "role": "CEO",
+      "final_state": {
+        "valence": 0.65,
+        "arousal": 0.72,
+        "energy": 124.3
+      }
+    },
+    // ... 3 more entities
+  ],
+  "timepoints": [
+    {
+      "timepoint_id": "tp_001",
+      "description": "Board meeting opens with CEO presenting Q4 results",
+      "timestamp": "2026-01-15T09:00:00Z",
+      "entities_present": ["ceo_alice", "cfo_bob", "cto_carol", "investor_dave"]
+    },
+    // ... 4 more timepoints
+  ],
+  "causal_edges": [
+    {
+      "from_timepoint": "tp_001",
+      "to_timepoint": "tp_002",
+      "causal_strength": 0.87,
+      "explanation": "CEO's presentation reveals cash flow concerns, triggering CFO's budget proposal"
+    },
+    // ... more edges
+  ]
+}
+```
+
+### Entity Data (JSONL)
+
+Each line is a complete entity state at a specific timepoint:
+
+```json entities_20260306_143022.jsonl
+{"entity_id":"ceo_alice","timepoint":"tp_001","valence":0.80,"arousal":0.45,"energy":130.0,"knowledge_items":12,"dialog_turns":3}
+{"entity_id":"ceo_alice","timepoint":"tp_002","valence":0.65,"arousal":0.68,"energy":125.4,"knowledge_items":15,"dialog_turns":5}
+{"entity_id":"ceo_alice","timepoint":"tp_003","valence":0.72,"arousal":0.52,"energy":122.1,"knowledge_items":18,"dialog_turns":4}
+```
+
+<Note>
+JSONL format is ideal for streaming processing, ML pipelines, and fine-tuning datasets. Each line is independently parseable.
+</Note>
+
+### SQLite Database Schema
+
+Query the database directly:
+
+```bash
+sqlite3 sim_20260306_143022.db
+```
+
+<CodeGroup>
+```sql Entities Table
+SELECT * FROM entities LIMIT 3;
+
+-- entity_id  | type  | role | initial_valence | initial_arousal | ...
+-- ceo_alice  | human | CEO  | 0.80            | 0.45            | ...
+-- cfo_bob    | human | CFO  | 0.60            | 0.55            | ...
+-- cto_carol  | human | CTO  | 0.70            | 0.50            | ...
+```
+
+```sql Timepoints Table
+SELECT timepoint_id, description FROM timepoints;
+
+-- timepoint_id | description
+-- tp_001       | Board meeting opens with CEO presenting Q4 results
+-- tp_002       | CFO proposes budget cuts to address cash flow
+-- tp_003       | CTO warns product delays threaten roadmap
+-- tp_004       | Investor demands clarity on burn rate
+-- tp_005       | Board votes on restructuring plan
+```
+
+```sql Dialog Table
+SELECT speaker, turn_number, content
+FROM dialog
+WHERE timepoint_id = 'tp_002'
+ORDER BY turn_number;
+
+-- speaker    | turn_number | content
+-- cfo_bob    | 1           | "We need to address the cash flow situation..."
+-- ceo_alice  | 2           | "I understand the concern, but..."
+-- cto_carol  | 3           | "Any budget cuts will impact our roadmap..."
+```
+
+```sql Knowledge Flow
+SELECT entity_id, fact, source, confidence
+FROM knowledge_items
+WHERE timepoint_id = 'tp_001';
+
+-- entity_id  | fact                          | source     | confidence
+-- cfo_bob    | Q4 revenue missed target by 15% | ceo_alice | 0.95
+-- cto_carol  | Cash reserves down to 8 months | ceo_alice | 0.90
+-- investor_dave | Board considering layoffs   | cfo_bob   | 0.75
+```
+</CodeGroup>
+
+### Training Data Format
+
+When applicable, training data is generated in prompt/completion pairs:
+
+```json training_20260306_143022.jsonl
+{"prompt":"An entity experiences an event in a historical simulation. Predict how their state changes.\n\n=== CAUSAL HISTORY (M7) ===\nTimeline leading to current moment (2 events):\n  tp_001: Board meeting opens with CEO presenting Q4 results\n  tp_002: CFO proposes budget cuts to address cash flow\n\n=== RELATIONSHIP CONTEXT (M13) ===\nRelationships with entities present at this event:\n  ceo_alice: professional colleague, reports to\n  cto_carol: professional colleague, peer\n  investor_dave: professional colleague, accountable to\n\n=== KNOWLEDGE PROVENANCE (M3) ===\nHow this entity acquired current knowledge:\n  Primary sources: ceo_alice (8 items), cfo_bob (5 items)\n  Learning modes: told (62%), observed (31%), inferred (7%)\n\n=== ENTITY STATE (M6) ===\ncfo_bob at T0:\n  Physical: Age 45.0, energy 125/130\n  Cognitive: 15 knowledge items, 0.78 decision confidence\n  Emotional: Valence 0.60, Arousal 0.68\n\n=== EVENT OCCURRING NOW ===\nCFO proposes 15% budget cut across all departments to address cash flow concerns...\n\n","completion":"STATE_UPDATE:\n  valence: 0.55 (decreased from 0.60 - stress from proposing unpopular cuts)\n  arousal: 0.75 (increased from 0.68 - anticipating pushback)\n  energy: 122.3 (decreased from 125.0 - cognitive load of presentation)\n  confidence: 0.82 (increased from 0.78 - confident in financial analysis)\n\nREASONING:\nCFO Bob's emotional state shifts as he presents difficult budget cuts. His valence drops slightly due to the stress of proposing measures he knows will be unpopular with engineering and product teams. Arousal increases as he anticipates resistance, particularly from the CTO. Energy decreases due to the cognitive effort of preparing and presenting detailed financial projections. However, his confidence increases because he has strong data backing his recommendation."}
+```
+
+<Warning>
+**Model Licensing for Training Data:**
+
+If using this data for fine-tuning, ensure your simulation used MIT or Apache 2.0 licensed models (DeepSeek, Mistral). Llama outputs **cannot** be used to train non-Llama models per Meta's license.
+
+See [Installation - Model Configuration](/installation#model-configuration) for details.
+</Warning>
+
+## Explore Temporal Modes
+
+Timepoint Pro supports 5 temporal modes, each changing how causality works:
+
+<CardGroup cols={2}>
+  <Card title="FORWARD (Default)" icon="arrow-right">
+    **Standard causality**
+    - Causes precede effects
+    - Knowledge flows forward
+    - No time paradoxes
+    - **Best for:** Realistic simulations, business scenarios, training data
+  </Card>
+  <Card title="PORTAL" icon="circle-arrow-left">
+    **Backward reasoning**
+    - Start from known endpoint
+    - Trace causal paths backward
+    - **Best for:** "How did we get here?" analysis, root cause investigation
+  </Card>
+  <Card title="BRANCHING" icon="code-branch">
+    **Counterfactual timelines**
+    - Single decision point → multiple futures
+    - Each branch internally consistent
+    - **Best for:** "What if" analysis, strategy evaluation
+  </Card>
+  <Card title="CYCLICAL" icon="rotate">
+    **Time loops and prophecy**
+    - Future constrains past
+    - Prophecies must be fulfilled/subverted
+    - **Best for:** Generational sagas, mystical scenarios
+  </Card>
+  <Card title="DIRECTORIAL" icon="film">
+    **Narrative structure**
+    - Dramatic tension drives events
+    - Five-act structure (setup → climax → resolution)
+    - **Best for:** Story arcs, character-driven narratives
+  </Card>
+</CardGroup>
+
+### Run a PORTAL Mode Simulation
+
+Let's run the Mars mission example - tracing backward from mission failure:
+
+```bash
+./run.sh run mars_mission_portal --portal-quick
+```
+
+**What happens:**
+
+1. **Known endpoint (2031):** Mission fails during orbital insertion
+2. **Generate 3 candidate causes** per backward step
+3. **Score each candidate** with 405B judge model (no mini-sims)
+4. **Select best candidate** and step back 1 year
+5. **Repeat 5 times** (`--portal-quick` = 5 steps)
+6. **Result:** Causal chain from 2026 → 2031
+
+**Cost:** ~$0.18 | **Runtime:** ~2-3 minutes (quick mode)
+
+<Info>
+**PORTAL output includes:**
+- Backward timeline (5-10 timepoints)
+- Candidate scoring logs
+- Pivot detection (critical decision points)
+- Full causal graph from origin → failure
+</Info>
+
+### Run a BRANCHING Mode Simulation
+
+Counterfactual timeline exploration:
+
+```bash
+./run.sh run castaway_colony_branching
+```
+
+**Scenario:** Alien planet survival. Day 7 decision point branches into:
+
+1. **Fortify strategy:** Build defenses, conserve resources
+2. **Explore strategy:** Search for water, map terrain
+3. **Repair strategy:** Fix comms equipment, signal for rescue
+
+Each branch evaluates against quantitative resource constraints (food, water, power).
+
+**Cost:** ~$0.35 | **Runtime:** ~8-12 minutes
+
+<Note>
+**All 19 mechanisms active:** `castaway_colony_branching` is the flagship showcase template demonstrating every mechanism from M1 (Heterogeneous Fidelity) to M19 (Knowledge Extraction).
+</Note>
+
+## Customize Parameters
+
+### Override Default Model
+
+<CodeGroup>
+```bash DeepSeek (MIT License, Training-Safe)
+./run.sh run board_meeting --model deepseek/deepseek-chat
+```
+
+```bash Gemini 3 Flash (1M Context, Fast)
+./run.sh run board_meeting --gemini-flash
+```
+
+```bash Groq (Ultra-Fast, 300 tok/s)
+./run.sh run board_meeting --groq
+```
+
+```bash Free Models ($0 Cost)
+./run.sh run board_meeting --free
+```
+</CodeGroup>
+
+### Parallel Execution
+
+Run multiple templates concurrently:
+
+```bash
+# Run all quick-tier templates with 4 parallel workers
+./run.sh run --tier quick --parallel 4
+
+# Run entire showcase category (13 templates) with 6 workers
+./run.sh run --category showcase --parallel 6
+```
+
+### Skip LLM Summaries (Faster, Cheaper)
+
+```bash
+./run.sh run board_meeting --skip-summaries
+```
+
+Skips post-simulation narrative summary generation. Saves ~$0.01-0.02 and 10-20 seconds per run.
+
+### Set Budget Limit
+
+```bash
+./run.sh run --tier standard --budget 1.00
+```
+
+Stops execution if cumulative cost exceeds $1.00.
+
+### Dry Run (Cost Estimate)
+
+```bash
+./run.sh run mars_mission_portal --dry-run
+```
+
+Shows cost estimate without running the simulation.
+
+## Export and Analyze
+
+### Export to Markdown
+
+```bash
+./run.sh export last --format md
+```
+
+Generates a human-readable markdown report:
+
+```markdown exports/run_20260306_143022.md
+# Board Meeting Simulation
+
+**Run ID:** run_20260306_143022_abc12345
+**Template:** board_meeting
+**Cost:** $0.0823
+**Duration:** 127s
+
+## Entities
+
+### CEO Alice
+- **Role:** Chief Executive Officer
+- **Final Emotional State:** Valence 0.65, Arousal 0.72
+- **Dialog Turns:** 15
+
+...
+
+## Timeline
+
+### tp_001 - Board Meeting Opens (09:00 AM)
+CEO presents Q4 results. Revenue missed target by 15%.
+
+**Dialog:**
+> **Alice:** "I want to address the Q4 numbers head-on..."
+> **Bob:** "We need to talk about the cash flow situation."
+
+...
+```
+
+### Export to JSON
+
+```bash
+./run.sh export last --format json --output ./analysis
+```
+
+Full structured JSON export to custom directory.
+
+### Query the Database
+
+Analyze dialog patterns:
+
+```bash
+sqlite3 output/simulations/sim_20260306_143022.db << EOF
+SELECT
+  speaker,
+  COUNT(*) as turn_count,
+  AVG(confidence) as avg_confidence
+FROM dialog
+GROUP BY speaker
+ORDER BY turn_count DESC;
+EOF
+```
+
+**Output:**
+
+```bash
+speaker      | turn_count | avg_confidence
+ceo_alice    | 15         | 0.82
+cfo_bob      | 12         | 0.75
+cto_carol    | 11         | 0.68
+investor_dave| 8          | 0.71
+```
+
+## Natural Language Mode
+
+Generate simulations from plain English descriptions:
+
+```bash
+python run_all_mechanism_tests.py --nl "emergency board meeting where 4 executives debate acquisition offer"
+```
+
+**With parameters:**
+
+```bash
+python run_all_mechanism_tests.py \
+  --nl "detective interrogates 3 witnesses about a murder" \
+  --nl-entities 4 \
+  --nl-timepoints 5
+```
+
+<Info>
+**Natural language mode automatically:**
+- Generates entities based on the scenario
+- Creates a social graph with relationships
+- Defines timepoints and causal structure
+- Synthesizes dialog with character voices
+</Info>
+
+## Convergence Testing
+
+Validate causal reasoning consistency by running the same template multiple times:
+
+```bash
+./run.sh convergence e2e board_meeting --runs 3
+```
+
+**What it does:**
+
+1. Runs `board_meeting` 3 times with identical parameters
+2. Compares causal graphs across runs using Jaccard similarity
+3. Grades convergence: A (≥90%), B (≥80%), C (≥70%), D (≥50%), F (under 50%)
+
+**Output:**
+
+```bash
+================================================================================
+CONVERGENCE ANALYSIS
+================================================================================
+Template:         board_meeting
+Runs:             3
+Convergence:      87.3%
+Grade:            B (Good)
+Divergent edges:  8 of 63 total
+
+Key Findings:
+- Strong agreement on critical path (tp_001 → tp_005)
+- Variation in relationship strength between CTO and Investor
+- Dialog content stable across runs
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Temporal Modes" icon="clock" href="/temporal-modes">
+    Deep dive into FORWARD, PORTAL, BRANCHING, CYCLICAL, DIRECTORIAL
+  </Card>
+  <Card title="Templates" icon="folder-tree" href="/templates">
+    All 21 templates with detailed descriptions
+  </Card>
+  <Card title="Mechanisms" icon="gears" href="/mechanisms">
+    The 19 mechanisms (M1-M19) that power simulations
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Programmatic simulation submission and data export
+  </Card>
+</CardGroup>
+
+## Advanced Topics
+
+### Persona Chat
+
+Chat with domain expert personas about your simulation results:
+
+```bash
+./run.sh chat --persona AGENT1 --context output/simulations/summary_*.json
+```
+
+**4 personas available:**
+- **AGENT1 (Victoria):** Corporate finance / regulatory expert
+- **AGENT2 (Dr. Raj):** Aerospace / mission assurance engineer  
+- **AGENT3 (Marcus):** Legal tech startup founder
+- **AGENT4 (Dr. Kate):** Wildlife ecology / RMEF researcher
+
+Each persona provides domain-specific feedback on simulation quality.
+
+### API Mode
+
+Submit simulations via REST API for cloud execution:
+
+```bash
+# Start API server
+./run.sh api start
+
+# Submit via API
+./run.sh run board_meeting --api --api-wait
+
+# Check API usage
+./run.sh api usage
+```
+
+<Note>
+API mode requires `TIMEPOINT_API_KEY` in `.env`. See [API Reference](/api-reference) for authentication.
+</Note>
+
+### Monitoring
+
+Real-time monitoring during long simulations:
+
+```bash
+./run.sh run castaway_colony_branching --monitor --interval 300
+```
+
+Displays live updates every 300 seconds (5 minutes) with:
+- Current timepoint progress
+- Entity state evolution
+- Token/cost accumulation
+- Estimated completion time
+
+## Summary
+
+You've learned how to:
+
+- ✓ Run production templates
+- ✓ Understand simulation output (JSON, JSONL, SQLite)
+- ✓ Explore temporal modes (FORWARD, PORTAL, BRANCHING)
+- ✓ Customize models, parallelism, budgets
+- ✓ Export and analyze results
+- ✓ Test convergence for reliability
+
+<Info>
+**Ready to dive deeper?** Explore [Temporal Modes](/temporal-modes) to understand how PORTAL, BRANCHING, and CYCLICAL modes change causality semantics, or browse the [Template Library](/templates) for all 21 scenarios.
+</Info>

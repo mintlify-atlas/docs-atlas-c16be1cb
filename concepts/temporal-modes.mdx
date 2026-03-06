@@ -1,0 +1,551 @@
+---
+title: "Temporal Modes"
+description: "Five ways to reason about time, causality, and consistency in social simulations"
+---
+
+## The Core Insight
+
+Time isn't one thing. Depending on your use case, "consistency" and "causality" mean very different things:
+
+- **Standard timeline**: Causes must precede effects (FORWARD)
+- **Strategic planning**: Reason backward from goals (PORTAL)
+- **Decision analysis**: Explore counterfactual branches (BRANCHING)
+- **Mythic narratives**: Future constrains past (CYCLICAL)
+- **Story arcs**: Dramatic tension drives events (DIRECTORIAL)
+
+Timepoint Pro treats **temporal mode as a first-class architectural dimension**. Each mode has different validation rules, generation strategies, and output structures.
+
+## The Five Modes
+
+<CardGroup cols={2}>
+  <Card title="FORWARD" icon="arrow-right">
+    Strict forward causality—no anachronisms
+  </Card>
+  <Card title="PORTAL" icon="bullseye">
+    Backward inference from fixed endpoints
+  </Card>
+  <Card title="BRANCHING" icon="code-branch">
+    Counterfactual timelines from decision points
+  </Card>
+  <Card title="CYCLICAL" icon="rotate">
+    Prophecy, time loops, generational repetition
+  </Card>
+  <Card title="DIRECTORIAL" icon="film">
+    Five-act dramatic structure, narrative-driven
+  </Card>
+</CardGroup>
+
+## Comparison Table
+
+| Mode | Causality Model | Best For | Example Template | Cost/Time |
+|------|----------------|----------|-----------------|----------|
+| **FORWARD** | Strict forward | Standard timelines | `board_meeting` | $0.15 / 5min |
+| **PORTAL** | Backward from target | Goal decomposition, critical paths | `mars_mission_portal` | $0.18 / 6min |
+| **BRANCHING** | Counterfactual branches | "What if" analysis | `castaway_colony_branching` | $0.35 / 12min |
+| **CYCLICAL** | Future constrains past | Mythic loops, generational sagas | `agent4_elk_migration` | $0.25 / 10min |
+| **DIRECTORIAL** | Dramatic tension drives | Story arcs, training data | `hound_shadow_directorial` | $0.20 / 8min |
+
+---
+
+## FORWARD Mode
+
+### Overview
+
+Standard causal DAG: causes precede effects, strict temporal ordering, no time travel.
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.FORWARD,
+)
+```
+
+### Validation Rules
+
+<AccordionGroup>
+  <Accordion title="Information Conservation">
+    Entity knowledge state ⊆ exposure history. No magical knowledge acquisition.
+  </Accordion>
+  <Accordion title="Temporal Ordering">
+    Event at T cannot reference information from T+1. Strict ancestry.
+  </Accordion>
+  <Accordion title="Network Flow">
+    Information propagates along relationship edges. No telepathy.
+  </Accordion>
+</AccordionGroup>
+
+### Use Cases
+
+- Corporate board meetings
+- Historical simulations with known timeline
+- Training data for causal reasoning models
+- Baseline for comparing other modes
+
+<CodeGroup>
+```bash Quick Start
+./run.sh run board_meeting
+```
+
+```python Python API
+from generation import TemplateLoader, Orchestrator
+
+loader = TemplateLoader()
+config = loader.load("board_meeting")
+config.temporal.mode = TemporalMode.FORWARD
+
+orchestrator = Orchestrator(config, llm_client, store)
+result = orchestrator.run()
+```
+</CodeGroup>
+
+---
+
+## PORTAL Mode
+
+### Overview
+
+**Backward temporal reasoning**: Given a known endpoint ("startup reaches $1B valuation in 2030") and origin ("founders meet in 2024"), discover plausible paths connecting them.
+
+<Frame>
+  <img src="/images/portal-mode.png" alt="Portal mode backward reasoning" />
+</Frame>
+
+### Architecture
+
+<Steps>
+  <Step title="Generate Candidate Antecedents">
+    For each consequent state, generate 3-5 plausible prior states
+  </Step>
+  <Step title="Score Coherence">
+    Hybrid evaluation: LLM plausibility + historical precedent + causal necessity + entity capability
+  </Step>
+  <Step title="Validate Forward">
+    Backward-generated paths must make sense when simulated forward
+  </Step>
+  <Step title="Detect Pivots">
+    Identify key decision points where paths could have diverged
+  </Step>
+</Steps>
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.PORTAL,
+    portal_description="John Doe elected President in 2040",
+    portal_year=2040,
+    origin_year=2025,
+    backward_steps=15,
+    path_count=3,
+    preserve_all_paths=True,  # Return all paths, not just top N
+)
+```
+
+### Exploration Strategies
+
+| Strategy | Pattern | Best For |
+|----------|---------|----------|
+| **Reverse chronological** | 2040 → 2039 → 2038 → ... → 2025 | Simple, predictable scenarios |
+| **Oscillating** | 2040 → 2025 → 2039 → 2026 → 2038 → ... | Complex interdependencies |
+| **Adaptive** | System chooses based on complexity | General-purpose (default) |
+
+### Entity Inference (2026 Fix)
+
+Portal mode uses **LLM-based entity inference** to populate `entities_present` for generated timepoints:
+
+1. Extract available entities from causal graph
+2. Prompt LLM to identify which entities should be present
+3. Fallback to regex-based name extraction
+
+```python
+# Example output
+inferred_entities = ["jane_chen", "campaign_manager", "opponent"]
+# Based on event: "Heated debate at city council meeting"
+```
+
+### Pivot Point Detection
+
+Multi-strategy detection:
+
+<Tabs>
+  <Tab title="Divergence-based">
+    Steps where >30% of paths have unique narratives
+  </Tab>
+  <Tab title="Keyword-based">
+    Detect pivot language: "decision", "funded", "launched", "acquired"
+  </Tab>
+  <Tab title="Event-based">
+    Check `key_events` and `entity_changes` for significant shifts
+  </Tab>
+  <Tab title="Score-variance">
+    Flag states with unusual plausibility scores
+  </Tab>
+</Tabs>
+
+### Advanced: Simulation-Based Judging
+
+<Note>
+Optional enhancement: Run mini forward simulations from each candidate antecedent, use judge LLM to evaluate plausibility. 2-5x cost increase for significantly better paths.
+</Note>
+
+```bash
+# Enable simulation judging with quick mode
+./run.sh run mars_mission_portal --portal-simjudged-quick
+```
+
+### Use Cases
+
+- **Strategic foresight**: Map critical paths to business goals
+- **Decision testing**: Identify necessary preconditions for outcomes
+- **Historical analysis**: "What had to happen for X to occur?"
+- **Training data**: Backward reasoning datasets for causal models
+
+<CodeGroup>
+```bash Quick Mode (5 steps, 15min)
+./run.sh run mars_mission_portal --portal-quick
+```
+
+```bash Full Mode (24 steps, 60-90min)
+./run.sh run mars_mission_portal
+```
+</CodeGroup>
+
+### Output Structure
+
+```json
+{
+  "paths": [
+    {
+      "path_id": "path_1",
+      "coherence_score": 0.847,
+      "states": [...],
+      "pivot_points": [4, 7, 12],
+      "key_divergences": ["funding_secured", "key_hire"]
+    }
+  ],
+  "divergence_analysis": {
+    "key_divergence_steps": [4, 5],
+    "clusters": {"high_coherence": 2, "medium": 3, "low": 1}
+  },
+  "total_pivots": 84
+}
+```
+
+---
+
+## BRANCHING Mode
+
+### Overview
+
+Create alternate timelines from intervention points. Each branch is internally consistent with proper causal propagation.
+
+<Frame>
+  <img src="/images/branching-mode.png" alt="Counterfactual branching" />
+</Frame>
+
+### How It Works
+
+```python
+def create_counterfactual_branch(parent_timeline, intervention_point, intervention):
+    branch = Timeline(parent_id=parent_timeline.id, branch_point=intervention_point)
+    
+    # Copy timepoints before intervention
+    for tp in parent_timeline.get_timepoints_before(intervention_point):
+        branch.add_timepoint(tp.deep_copy())
+    
+    # Apply intervention
+    branch_tp = parent_timeline.get_timepoint(intervention_point).deep_copy()
+    apply_intervention(branch_tp, intervention)
+    branch.add_timepoint(branch_tp)
+    
+    # Propagate causal effects forward
+    propagate_causal_effects(branch, intervention_point)
+    
+    return branch
+```
+
+### Scenario Anchoring
+
+BRANCHING mode forward steps are **anchored to the scenario premise** via:
+
+<AccordionGroup>
+  <Accordion title="Scenario Anchor Block">
+    First 800 chars of `scenario_description` injected in every prompt with "do NOT drift" instruction
+  </Accordion>
+  <Accordion title="Entity Roster">
+    Rich role descriptions injected per step to prevent LLM from inventing new characters
+  </Accordion>
+  <Accordion title="Accumulated World State">
+    Persistent store of `key_events_history`, `resource_states`, `monitoring` for running context
+  </Accordion>
+</AccordionGroup>
+
+### Example: Castaway Colony
+
+At Day 7, Commander Tanaka's decision spawns **3 counterfactual branches**:
+
+<Tabs>
+  <Tab title="Branch A: Fortify & Wait">
+    - Conservative resource consumption
+    - Focus on shelter and rationing
+    - Risk: slow rescue, low morale
+    - Entities: Commander, Engineer, Doctor (8 total)
+  </Tab>
+  <Tab title="Branch B: Explore & Adapt">
+    - Send exploration teams
+    - Discover alien flora + cave shelter
+    - Risk: injuries, unknown toxins
+    - Entities: Commander, Xenobiologist, Scout (8 total)
+  </Tab>
+  <Tab title="Branch C: Repair & Signal">
+    - All resources to beacon repair
+    - Navigator's pre-crash data critical
+    - Risk: resource depletion if repair fails
+    - Entities: Commander, Engineer, Navigator (8 total)
+  </Tab>
+</Tabs>
+
+<Note>
+**Causal Consistency**: Branch B can't use cave shelter discovered in Branch A. Branch C can't benefit from food sources found in Branch B's exploration.
+</Note>
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.BRANCHING,
+    branch_points=["day_7_decision"],  # Where to create branches
+    interventions=[
+        Intervention(type="decision_override", target="commander", 
+                    parameters={"choice": "fortify"}),
+        Intervention(type="decision_override", target="commander", 
+                    parameters={"choice": "explore"}),
+        Intervention(type="decision_override", target="commander", 
+                    parameters={"choice": "repair"}),
+    ]
+)
+```
+
+### Use Cases
+
+- **Decision testing**: Compare outcomes of different strategies
+- **Risk analysis**: Quantify downside of each option
+- **Policy simulation**: Test interventions before implementation
+- **Training data**: Counterfactual reasoning datasets
+
+<CodeGroup>
+```bash Run Branching Scenario
+./run.sh run castaway_colony_branching
+# 8 entities, 16 timepoints, 3 branches
+# Cost: ~$0.35, Time: ~12 minutes
+```
+
+```bash Compare Branches
+python scripts/compare_branches.py \
+  --run-id run_abc123 \
+  --metrics survival_probability resource_efficiency morale
+```
+</CodeGroup>
+
+---
+
+## CYCLICAL Mode
+
+### Overview
+
+Prophecy, time loops, generational repetition. Future events can constrain or cause past events within relaxed causality rules.
+
+### The Core Innovation
+
+**Cycle type is discovered, not prescribed**. The LLM interprets what "cyclical" means for the specific scenario:
+
+| Cycle Type | What Repeats | What Changes | Example |
+|------------|-------------|--------------|----------|
+| **repeating** | Events, structure | Details, awareness | Groundhog Day loop |
+| **spiral** | Structural beats | Stakes, intensity | Dynasty saga |
+| **causal_loop** | Causal structure | Nothing (bootstrap) | Predestination paradox |
+| **oscillating** | Poles | Magnitude, timing | Boom/bust cycles |
+| **composite** | LLM-directed | LLM-directed | Mixed patterns |
+
+### Prophecy System
+
+Prophecies create **narrative obligation**: either fulfill (destiny) or subvert (tragedy).
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.CYCLICAL,
+    cycle_length=4,  # Timepoints per cycle
+    prophecy_accuracy=0.7,  # How often prophecies come true
+)
+```
+
+<AccordionGroup>
+  <Accordion title="Prophecy Tracking">
+    - **prophecy_accuracy**: 0.0-1.0 fulfillment rate
+    - **fulfillment_confidence**: LLM-rated confidence
+    - **prophecy_source_cycle**: Which cycle generated it
+  </Accordion>
+  <Accordion title="Prophecy Mechanisms">
+    Vary by scenario: witches' riddles (Macbeth), deja vu (time loop), analyst forecasts (economics), ancestral curses (dynasty)
+  </Accordion>
+</AccordionGroup>
+
+### Causal Loop System
+
+For bootstrap paradoxes where events cause themselves:
+
+<Steps>
+  <Step title="Detect Opportunities">
+    "This event could be what caused X in cycle 1"
+  </Step>
+  <Step title="Enforce Closure">
+    Rewrite states to create explicit causal links
+  </Step>
+  <Step title="Validate Completion">
+    All opened loops must eventually close
+  </Step>
+</Steps>
+
+### Fidelity Allocation
+
+| Position | Fidelity | Why |
+|----------|----------|-----|
+| Cycle boundaries | DIALOG | Where patterns become visible |
+| Prophecy moments | TRAINED | High-stakes narrative pivots |
+| Mid-cycle events | SCENE | Repeating "texture" |
+| Variation points | DIALOG | Where this cycle diverges |
+
+### Use Cases
+
+- Time loop narratives with protagonist evolution
+- Generational sagas with echoing patterns
+- Economic/ecological cycles with feedback
+- Mythic/religious narratives with destiny
+- Training data for non-linear temporal reasoning
+
+<CodeGroup>
+```bash Run Cyclical Scenario
+./run.sh run agent4_elk_migration
+# 5 paths, 5 cycles, prophecy resolution
+# Coherence: 0.727
+```
+</CodeGroup>
+
+---
+
+## DIRECTORIAL Mode
+
+### Overview
+
+**Causality serves narrative, not vice versa**. Events happen because the story needs them. Dramatic structure is a first-class constraint.
+
+<Frame>
+  <img src="/images/directorial-arc.png" alt="Five-act dramatic structure" />
+</Frame>
+
+### Arc Engine
+
+Five-act structure with emergent pacing:
+
+| Act | Tension | Temporal Density | Fidelity |
+|-----|---------|------------------|----------|
+| **SETUP** | 0.2-0.4 | Sparse (establishing) | SCENE/TENSOR |
+| **RISING** | 0.4-0.7 | Increasing | DIALOG |
+| **CLIMAX** | 0.8-1.0 | Dense (every moment matters) | TRAINED |
+| **FALLING** | 0.5-0.3 | Decreasing | DIALOG |
+| **RESOLUTION** | 0.1-0.2 | Sparse (denouement) | SCENE |
+
+### Camera System
+
+The "invisible director" controls:
+
+<Tabs>
+  <Tab title="POV Rotation">
+    - Main character for climax
+    - Ensemble for setup
+    - Antagonist for dramatic irony
+  </Tab>
+  <Tab title="Framing Vocabulary">
+    - **WIDE**: Establish scope, spatial relationships
+    - **CLOSE**: Internal conflict, decision moments
+    - **OVERHEAD**: God's-eye omniscience
+    - **SUBJECTIVE**: Limited perception, unreliable narration
+    - **ENSEMBLE**: Multiple simultaneous perspectives
+  </Tab>
+  <Tab title="Parallel Storylines">
+    A-plot and B-plot interleave at configurable ratios (heist structures)
+  </Tab>
+</Tabs>
+
+### Dramatic Irony Detection
+
+When audience knows something characters don't:
+
+```python
+# System emphasizes the gap
+character_makes_tragic_choice()
+  because_they_dont_know(audience_visible_fact)
+```
+
+### Fidelity as Dramatic Investment
+
+Resources concentrate where drama concentrates. A 20-timepoint tragedy might allocate **40% of token budget to 3 climax timepoints**.
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.DIRECTORIAL,
+    narrative_arc="rising_action",
+    dramatic_tension=0.8,
+)
+```
+
+### Use Cases
+
+- Classical dramatic structures (tragedy, comedy, heist, courtroom)
+- Character-driven vs plot-driven emphasis
+- Multiple timeline interleaving
+- Training data for story-aware models
+
+<CodeGroup>
+```bash Run Directorial Scenario
+./run.sh run hound_shadow_directorial
+# Mystery narrative with dramatic structure
+```
+</CodeGroup>
+
+---
+
+## Mode Selection Guide
+
+<CardGroup cols={2}>
+  <Card title="Need strict causality?" icon="arrow-right">
+    Use **FORWARD** for corporate, historical, or baseline simulations
+  </Card>
+  <Card title="Working backward from a goal?" icon="bullseye">
+    Use **PORTAL** for strategic planning and critical path analysis
+  </Card>
+  <Card title="Testing decisions?" icon="code-branch">
+    Use **BRANCHING** for counterfactual analysis and risk assessment
+  </Card>
+  <Card title="Modeling repetition?" icon="rotate">
+    Use **CYCLICAL** for loops, prophecy, or generational patterns
+  </Card>
+  <Card title="Creating narrative?" icon="film">
+    Use **DIRECTORIAL** for story arcs and dramatic training data
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Fidelity Management" icon="layer-group" href="/concepts/fidelity-management">
+    Learn how resolution levels reduce costs 95%
+  </Card>
+  <Card title="Knowledge Provenance" icon="eye" href="/concepts/knowledge-provenance">
+    Deep dive into exposure events
+  </Card>
+  <Card title="All 19 Mechanisms" icon="gears" href="/concepts/mechanisms">
+    Complete technical reference
+  </Card>
+</CardGroup>

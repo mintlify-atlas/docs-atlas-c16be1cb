@@ -1,0 +1,473 @@
+---
+title: 'Board Meeting'
+description: 'Tech startup board meeting with CEO acquisition proposal—fast iteration and testing'
+icon: 'handshake'
+---
+
+# Board Meeting: Simple Corporate Scenario
+
+The **Board Meeting** template is the simplest showcase example—a 5-entity, 3-timepoint corporate scenario perfect for fast iteration, testing, and learning the Timepoint Pro workflow.
+
+<Info>
+**Template**: `board_meeting` | **Mode**: FORWARD | **Cost**: ~$0.05 | **Duration**: ~2 minutes
+</Info>
+
+## The Scenario
+
+A tech startup board meeting where the CEO proposes an acquisition. Five executives with competing agendas navigate high-tension strategic maneuvering:
+
+- **CEO**: Pushing the acquisition
+- **CFO**: Concerned about financial risk
+- **Lead Investor**: Evaluating exit timing
+- **Board Chair**: Balancing stakeholder interests
+- **VP Engineering**: Worried about technical integration
+
+**Temporal mode**: FORWARD (standard causality—causes precede effects)
+
+**Narrative arc**: 3 hours compressed into 3 timepoints
+
+## Why Start Here?
+
+This template is ideal for:
+
+<CardGroup cols={2}>
+  <Card title="Learning the Workflow" icon="graduation-cap">
+    Simple enough to understand in one run, complex enough to show core mechanisms
+  </Card>
+  
+  <Card title="Fast Iteration" icon="bolt">
+    ~2 minutes, ~$0.05 per run—perfect for testing parameter changes
+  </Card>
+  
+  <Card title="Voice Tuning" icon="microphone">
+    5 distinct characters with archetypal profiles (executive, technical, investor)
+  </Card>
+  
+  <Card title="Relationship Dynamics" icon="people-arrows">
+    Clear power dynamics, trust evolution, alignment tracking
+  </Card>
+</CardGroup>
+
+## Running the Simulation
+
+<Steps>
+  <Step title="Install and configure">
+    ```bash
+    git clone https://github.com/timepoint-ai/timepoint-pro.git
+    cd timepoint-pro
+    pip install -r requirements.txt
+    export OPENROUTER_API_KEY=your_key_here
+    ```
+  </Step>
+  
+  <Step title="Run the simulation">
+    ```bash
+    ./run.sh run board_meeting
+    ```
+    
+    Expected output:
+    - 3 timepoints (3 hours of meeting time)
+    - 5 entities all at dialog resolution
+    - ~$0.05 cost
+    - ~2 minutes duration
+  </Step>
+  
+  <Step title="Explore the outputs">
+    ```bash
+    # View narrative export
+    cat datasets/board_meeting_example/narrative_*.markdown
+    
+    # Check dialog transcripts
+    ./run.sh export last --format json
+    
+    # Generate screenplay format
+    ./run.sh export last --format fountain
+    ```
+  </Step>
+</Steps>
+
+## Output Artifacts
+
+<Tabs>
+  <Tab title="Dialog Transcripts">
+    Each timepoint generates multi-party dialog with tracked confidence scores:
+    
+    ```
+    Timepoint 1 — Opening Proposal (Hour 1)
+    
+    CEO: I want to bring a proposal to the board today. We have an 
+         opportunity to acquire SyncTech for $12M. Their customer base 
+         aligns perfectly with our roadmap.
+    
+    CFO: $12M is a significant commitment given our current runway. 
+         Can you walk us through the due diligence and expected ROI?
+    
+    Lead Investor: What's the timeline on this? We're 8 months from 
+                   our Series B raise, and I want to understand how 
+                   this affects our valuation story.
+    
+    VP Engineering: I'm more concerned about technical integration. 
+                    Do we have a staffing plan for onboarding their 
+                    engineering team?
+    ```
+    
+    - Independent LLM calls per character
+    - PersonaParams derived from entity state
+    - Voice discipline applied (no AI-sounding phrases)
+  </Tab>
+  
+  <Tab title="Entity States">
+    Each entity maintains cognitive and emotional state:
+    
+    ```json
+    {
+      "ceo": {
+        "emotional_valence": 0.35,
+        "emotional_arousal": 0.72,
+        "energy_budget": 118.0,
+        "role": "CEO pushing acquisition",
+        "archetype": "executive_director"
+      },
+      "cfo": {
+        "emotional_valence": -0.15,
+        "emotional_arousal": 0.68,
+        "energy_budget": 112.0,
+        "role": "CFO concerned about financial risk",
+        "archetype": "executive_director"
+      }
+    }
+    ```
+    
+    Valence and arousal propagate through interactions, affecting dialog generation parameters.
+  </Tab>
+  
+  <Tab title="Relationship Tracking">
+    M13 tracks trust and alignment between entities:
+    
+    ```json
+    {
+      "ceo -> cfo": {
+        "type": "cooperative",
+        "trust": 0.65,
+        "alignment": 0.50
+      },
+      "cfo -> lead_investor": {
+        "type": "aligned",
+        "trust": 0.75,
+        "alignment": 0.80
+      },
+      "ceo -> vp_engineering": {
+        "type": "tense",
+        "trust": 0.55,
+        "alignment": 0.40
+      }
+    }
+    ```
+    
+    Relationships evolve across timepoints as arguments unfold.
+  </Tab>
+  
+  <Tab title="Knowledge Flow">
+    M3 tracks who knows what, when:
+    
+    ```json
+    [
+      {
+        "entity": "cfo",
+        "knowledge": "SyncTech acquisition proposal ($12M)",
+        "source": "ceo",
+        "timepoint": "tp_000",
+        "confidence": 0.95
+      },
+      {
+        "entity": "lead_investor",
+        "knowledge": "Series B raise timeline (8 months)",
+        "source": "scene_initialization",
+        "timepoint": "pre_tp_000",
+        "confidence": 1.0
+      },
+      {
+        "entity": "vp_engineering",
+        "knowledge": "Technical integration concerns",
+        "source": "self_generated",
+        "timepoint": "tp_000",
+        "confidence": 0.90
+      }
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+## Mechanisms Featured
+
+This template demonstrates 4 core mechanisms:
+
+<AccordionGroup>
+  <Accordion title="M1: Heterogeneous Fidelity" icon="layer-group">
+    All 5 entities start at TENSOR_ONLY resolution and elevate to DIALOG as the meeting begins. In more complex scenarios, background attendees would remain at TENSOR while key speakers elevate.
+    
+    **Try this**: Modify `initial_resolution` in the template to start entities at different levels and observe lazy elevation.
+  </Accordion>
+  
+  <Accordion title="M7: Causal Chains" icon="link">
+    Events occur in proper temporal order:
+    
+    1. CEO proposes acquisition (tp_000)
+    2. CFO raises financial concerns → CEO responds with ROI data (tp_001)
+    3. Board vote with updated context (tp_002)
+    
+    Each event references causal history from previous timepoints.
+  </Accordion>
+  
+  <Accordion title="M11: Dialog Synthesis" icon="messages">
+    Per-character turn generation with:
+    - **LangGraph steering**: Selects next speaker based on narrative goals
+    - **Character node**: Independent LLM call per character
+    - **PersonaParams**: Arousal → temperature, energy → max_tokens
+    - **Voice discipline**: 7-principle block prevents AI-sounding output
+    - **Archetype profiles**: Executive rhetorical style (short sentences, business framing, decisiveness)
+  </Accordion>
+  
+  <Accordion title="M13: Relationship Tracking" icon="people-arrows">
+    Trust and alignment values evolve:
+    
+    - CEO-CFO trust starts at 0.65, may degrade if financial concerns are dismissed
+    - CFO-Lead Investor alignment high (0.80)—both focused on financial prudence
+    - CEO-VP Engineering tension (0.40 alignment)—strategic vs. operational focus
+    
+    Relationship state affects dialog generation (low trust = more hedging, higher arousal).
+  </Accordion>
+</AccordionGroup>
+
+## Template Configuration
+
+```json
+{
+  "scenario_description": "Simulate a tech startup board meeting where CEO proposes an acquisition",
+  "world_id": "board_meeting_example",
+  "patch": {
+    "name": "Boardroom Brass",
+    "category": "corporate",
+    "tags": ["conflict", "decision", "multi-entity", "negotiation"],
+    "description": "High-tension executive dynamics with competing agendas and strategic maneuvering"
+  },
+  "entities": {
+    "count": 5,
+    "types": ["human"],
+    "initial_resolution": "tensor_only",
+    "animism_level": 0
+  },
+  "timepoints": {
+    "count": 3,
+    "resolution": "hour"
+  },
+  "temporal": {
+    "mode": "forward",
+    "dramatic_tension": 0.5,
+    "token_budget": 80000.0,
+    "fidelity_template": "balanced"
+  },
+  "outputs": {
+    "formats": ["json", "markdown"],
+    "include_dialogs": true,
+    "include_relationships": true,
+    "include_knowledge_flow": true,
+    "narrative_detail_level": "summary"
+  }
+}
+```
+
+## Customization Ideas
+
+<CardGroup cols={2}>
+  <Card title="Add More Entities" icon="users-plus">
+    ```json
+    "entities": {
+      "count": 7,
+      "types": ["human"]
+    }
+    ```
+    Add legal counsel, product lead, or advisors
+  </Card>
+  
+  <Card title="Extend Timeline" icon="clock">
+    ```json
+    "timepoints": {
+      "count": 5,
+      "resolution": "hour"
+    }
+    ```
+    Multi-session board meetings
+  </Card>
+  
+  <Card title="Enable Branching" icon="code-branch">
+    ```json
+    "temporal": {
+      "mode": "branching",
+      "enable_counterfactuals": true
+    }
+    ```
+    Explore: What if CFO votes yes vs. no?
+  </Card>
+  
+  <Card title="Increase Tension" icon="bolt">
+    ```json
+    "temporal": {
+      "dramatic_tension": 0.8
+    }
+    ```
+    Higher arousal, more conflict
+  </Card>
+</CardGroup>
+
+## Iteration Workflow
+
+This template is perfect for testing parameter changes:
+
+<Steps>
+  <Step title="Baseline run">
+    ```bash
+    ./run.sh run board_meeting
+    ```
+    Establish baseline dialog quality and cost
+  </Step>
+  
+  <Step title="Modify parameters">
+    Edit `generation/templates/showcase/board_meeting.json`:
+    
+    ```json
+    "temporal": {
+      "dramatic_tension": 0.8,  // was 0.5
+      "token_budget": 120000.0  // was 80000.0
+    }
+    ```
+  </Step>
+  
+  <Step title="Compare outputs">
+    ```bash
+    ./run.sh run board_meeting
+    ./run.sh convergence e2e board_meeting --runs 3
+    ```
+    
+    Analyze:
+    - Did higher tension increase arousal values?
+    - Did dialog become more confrontational?
+    - How did cost change?
+  </Step>
+</Steps>
+
+## Cost Optimization
+
+Because this template is cheap (~$0.05), it's ideal for testing cost reduction strategies:
+
+### Strategy 1: Use Free Models
+```bash
+./run.sh run --free board_meeting
+```
+Uses best available free model (cost: $0)
+
+### Strategy 2: Lower Token Budget
+```json
+"temporal": {
+  "token_budget": 50000.0,  // was 80000.0
+  "token_budget_mode": "hard"  // enforce strict limit
+}
+```
+
+### Strategy 3: Reduce Resolution
+```json
+"entities": {
+  "initial_resolution": "scene"  // less detail than dialog
+}
+```
+
+### Strategy 4: Model Selection
+```bash
+# Use smaller model for this simple scenario
+./run.sh run --model qwen/qwen-2.5-7b-instruct board_meeting
+```
+
+## Export Formats
+
+<Tabs>
+  <Tab title="Screenplay (Fountain)">
+    ```bash
+    ./run.sh export last --format fountain
+    ```
+    
+    Generates industry-standard screenplay:
+    ```
+    INT. BOARDROOM - DAY
+    
+    CEO
+    I want to bring a proposal to the board today.
+    We have an opportunity to acquire SyncTech
+    for $12M.
+    
+    CFO
+    $12M is a significant commitment given our
+    current runway.
+    ```
+    
+    Properly formatted with Courier 12pt, standard margins.
+  </Tab>
+  
+  <Tab title="Training Data (JSONL)">
+    ```bash
+    ./run.sh export last --format jsonl
+    ```
+    
+    Structured prompt/completion pairs:
+    ```jsonl
+    {"prompt": "=== CAUSAL HISTORY ===\ntp_000: CEO proposes acquisition...\n=== ENTITY STATE ===\ncfo: valence -0.15, arousal 0.68...\n=== PREDICTION TASK ===\nPredict CFO's response", "completion": "CFO raises financial risk concerns, requests ROI data"}
+    ```
+  </Tab>
+  
+  <Tab title="Narrative (Markdown)">
+    Auto-generated summary with LLM enhancement:
+    
+    ```markdown
+    # Board Meeting Simulation
+    
+    ## Summary
+    
+    CEO proposes $12M acquisition of SyncTech. CFO raises 
+    financial concerns about runway impact. Lead Investor 
+    questions timing relative to Series B. VP Engineering 
+    worries about technical integration complexity.
+    
+    ## Key Decision Points
+    
+    - Hour 1: Proposal presented
+    - Hour 2: Financial analysis and debate
+    - Hour 3: Board vote (outcome varies by run)
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Mars Mission Portal" icon="rocket" href="/examples/mars-mission">
+    Try backward reasoning with PORTAL mode
+  </Card>
+  
+  <Card title="Castaway Colony" icon="planet-ringed" href="/examples/castaway-colony">
+    Explore all 19 mechanisms in full showcase
+  </Card>
+  
+  <Card title="Create Custom Scenario" icon="pen-to-square" href="/examples/custom-scenario">
+    Build your own corporate simulation from scratch
+  </Card>
+  
+  <Card title="Convergence Testing" icon="rotate" href="/guides/convergence">
+    Learn to measure causal graph stability
+  </Card>
+</CardGroup>
+
+<Note>
+**Pro Tip**: Run this template 3-5 times to observe convergence behavior. Questions to explore:
+- Does the CFO always raise financial concerns first?
+- Is the CEO-CFO relationship consistently tense?
+- What's the variance in board vote outcomes?
+</Note>

@@ -1,0 +1,460 @@
+---
+title: "Temporal Reasoning"
+description: "M7, M8, M12, M14, M17 - Multiple notions of time and causality"
+---
+
+## The Core Insight
+
+Time isn't one thing. The framework supports **multiple temporal ontologies**, each with different causal semantics and validation rules.
+
+**Key principle**: Each temporal mode changes what "consistency" means and how validation works.
+
+## M17: Modal Temporal Causality
+
+Five temporal modes, each defining different causal regimes.
+
+### Temporal Modes
+
+```python
+class TemporalMode(str, Enum):
+    FORWARD = "forward"           # Standard causality—causes precede effects
+    DIRECTORIAL = "directorial"  # Narrative time with flashbacks, ellipsis
+    BRANCHING = "branching"      # Counterfactual timelines diverge from decision points
+    CYCLICAL = "cyclical"        # Prophetic/mythic time—future constrains past
+    PORTAL = "portal"            # Backward inference from known endpoints
+```
+
+**From `schemas.py:20-27`**
+
+### Mode-Specific Complexity Multipliers
+
+```python
+complexity_map = {
+    FORWARD: 1.0,        # Baseline
+    DIRECTORIAL: 1.2,    # Narrative structure overhead
+    CYCLICAL: 1.3,       # Prophecy validation
+    BRANCHING: 1.4,      # Multiple timelines
+    PORTAL: 1.5,         # Backward inference (most expensive)
+}
+```
+
+Token budgets scale with modal complexity.
+
+## PORTAL Mode: Backward Temporal Reasoning
+
+Given a **known endpoint** ("startup reaches $1B valuation in 2030") and **origin** ("founders meet in 2024"), PORTAL discovers plausible paths connecting them.
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.PORTAL,
+    portal_description="John Doe elected President in 2040",
+    portal_year=2040,
+    origin_year=2025,
+    backward_steps=15,
+    path_count=3
+)
+```
+
+### Architecture
+
+**Generation → Scoring → Validation → Pivot Detection**
+
+1. **Generate candidate antecedent states** working backward from endpoint
+2. **Score via hybrid evaluation**:
+   - LLM plausibility
+   - Historical precedent
+   - Causal necessity
+   - Entity capability
+3. **Validate forward coherence**: Backward-generated paths must make sense when simulated forward
+4. **Detect pivot points**: Key decision moments where paths diverge
+
+### Exploration Strategies
+
+```python
+# Reverse chronological (simple)
+2040 → 2039 → 2038 → ... → 2025
+
+# Oscillating (better for complex scenarios)
+2040 → 2025 → 2039 → 2026 → 2038 → 2027 → ...
+
+# Adaptive (system chooses based on complexity)
+```
+
+### Entity Inference Fix (January 2026)
+
+Original problem: Portal mode blindly copied `entities_present` from consequent, producing **empty lists**.
+
+Solution: **LLM-based entity inference** per generated timepoint.
+
+```python
+# In TemporalAgent._infer_entities_for_timepoint()
+inferred_entities = self._infer_entities_for_timepoint(
+    event_description="Heated debate at city council meeting",
+    available_entities=["jane_chen", "campaign_manager", "opponent"],
+    context=context
+)
+# Returns: ["jane_chen", "opponent"] based on event relevance
+```
+
+**From workflows/temporal_agent.py implementation**
+
+The system:
+1. Extracts available entities from context or causal graph
+2. Prompts LLM to identify which entities should be present
+3. Falls back to regex-based name extraction if LLM unavailable
+
+### Forward Coherence Validation
+
+Backward-generated paths must make sense when simulated forward. Paths below coherence threshold are:
+- Pruned
+- Backtracked
+- Marked with warnings
+
+### Pivot Point Detection (January 2026 Fix)
+
+Original problem: `_detect_pivot_points()` checked `children_states` which was never populated during backward simulation → **zero pivot points detected**.
+
+Solution: **Multi-strategy detection**:
+
+1. **Divergence-based**: Uses `key_divergence_points` from path analysis (steps where >30% of paths have unique narratives)
+2. **Keyword-based**: Detects pivot language ("decision", "pivoted", "funding", "launched", "founded", "acquired")
+3. **Event-based**: Checks `key_events` and `entity_changes` for significant shifts
+4. **Score-variance**: Flags states with unusual plausibility scores relative to neighbors
+
+**Before fix**: 0 pivot points detected  
+**After fix**: 84 pivot points detected (14 per path × 6 paths)
+
+### Path Divergence Analysis
+
+After path generation, the system analyzes where paths diverge:
+
+```python
+Step 6: Computing path divergence...
+  Key divergence at steps: [23, 24]
+  Clusters: 1 (high_coherence)
+
+Step 7: Detecting pivot points...
+  Path 1: 14 pivot points detected
+  Path 2: 14 pivot points detected
+  ...
+
+PORTAL SIMULATION COMPLETE
+Total pivot points: 84 across 6 paths
+Key divergence points: [23, 24]
+```
+
+### Quick Mode
+
+```bash
+./run.sh run <template> --portal-quick
+```
+
+Reduces `backward_steps` from default (often 24) to **5** for fast demos (~15 min vs 1+ hour).
+
+### Fidelity Template Scaling
+
+Templates now scale proportionally with `backward_steps` instead of using hardcoded sizes.
+
+| Template | Distribution |
+|----------|-------------|
+| `minimalist` | 70% TENSOR, 21% SCENE, 7% DIALOG |
+| `balanced` | 33% TENSOR, 33% SCENE, 20% GRAPH, 13% DIALOG |
+| `portal_pivots` | 2 TRAINED endpoints + scaled middle |
+| `max_quality` | 66% DIALOG, 33% TRAINED |
+
+## DIRECTORIAL Mode: Narrative-Driven Reasoning
+
+In DIRECTORIAL mode, causality serves **narrative** rather than the reverse. Events happen because the story needs them.
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.DIRECTORIAL,
+    narrative_arc="rising_action",
+    dramatic_tension=0.8,
+)
+```
+
+### Five-Act Structure
+
+| Act | Tension Range | Temporal Density | Fidelity Allocation |
+|-----|---------------|------------------|---------------------|
+| SETUP | 0.2-0.4 | Sparse (establishing beats) | SCENE/TENSOR_ONLY |
+| RISING | 0.4-0.7 | Increasing (complications) | DIALOG |
+| CLIMAX | 0.8-1.0 | Dense (every moment matters) | TRAINED |
+| FALLING | 0.5-0.3 | Decreasing (consequences) | DIALOG |
+| RESOLUTION | 0.1-0.2 | Sparse (denouement) | SCENE |
+
+The arc engine shapes generation:
+- **Rising action**: Conflict keywords in prompts
+- **Climax**: Higher temperature (0.7 + tension×0.2) for dramatic unpredictability
+- **Resolution**: Closure and consequence emphasis
+
+### Camera System
+
+The "invisible director" controls:
+
+**POV Rotation**:
+- Main character for climax scenes
+- Ensemble for setup
+- Antagonist perspective for dramatic irony
+
+**Framing Vocabulary**:
+- **WIDE**: Establish scope, show relationships in space
+- **CLOSE**: Internal conflict, decision moments, emotional beats
+- **OVERHEAD**: God's-eye omniscience, fate bearing down
+- **SUBJECTIVE**: Character's limited perception, unreliable narration
+- **ENSEMBLE**: Multiple simultaneous perspectives, group dynamics
+
+### Dramatic Irony Detection
+
+The system identifies moments where the audience knows something characters don't. When detected, generation emphasizes the gap—characters make choices that are tragic or comic **because** of what they don't know.
+
+### Fidelity as Dramatic Investment
+
+Resources concentrate where drama concentrates. A 20-timepoint tragedy might allocate **40% of its token budget** to 3 climax timepoints. Background setup exists at TENSOR_ONLY because the story hasn't asked us to look closely yet.
+
+### Implementation
+
+```bash
+./run.sh run hound_shadow_directorial  # Full directorial mode
+```
+
+**From `workflows/directorial_strategy.py`**
+
+## CYCLICAL Mode: Prophecy and Time Loops
+
+CYCLICAL mode supports:
+- Time loop narratives
+- Generational sagas
+- Economic/ecological cycles
+- Mythic/religious narratives
+
+### Configuration
+
+```python
+config = TemporalConfig(
+    mode=TemporalMode.CYCLICAL,
+    cycle_length=4,
+    prophecy_accuracy=0.7,
+)
+```
+
+### Cycle Semantics Interpretation
+
+Key innovation: Cycle type is **discovered**, not prescribed.
+
+| Cycle Type | Variation Mode | What Repeats | What Changes | Example |
+|------------|---------------|--------------|--------------|---------||
+| `repeating` | Mutation | Events, structure | Details, awareness | Groundhog Day—same day, growing knowledge |
+| `spiral` | Amplification | Structural beats | Stakes, intensity | Dynasty saga—same conflict, higher stakes |
+| `causal_loop` | Retroactive | Causal structure | Nothing (bootstrap) | Predestination—event causes its own preconditions |
+| `oscillating` | Inversion | Poles | Magnitude, timing | Boom/bust—expansion then contraction |
+| `composite` | Mixed | LLM-directed | LLM-directed | Complex patterns combining multiple types |
+
+The system generates a `CycleSemantics` object:
+- `cycle_type`
+- `variation_mode`
+- `escalation_rule`
+- `prophecy_mechanism`
+- `key_recurring_elements`
+- `variation_seeds`
+
+All subsequent generation respects these semantics.
+
+### Prophecy System
+
+Prophecies aren't decorative—they're **structural**. A prophecy creates narrative obligation: either fulfill it (destiny) or subvert it (tragedy/comedy).
+
+Tracking:
+- **prophecy_accuracy** (0.0-1.0): How often prophecies come true
+- **fulfillment_confidence**: LLM-rated confidence that a prophecy was fulfilled
+- **prophecy_source_cycle**: Which cycle generated the prophecy (enables "ancient prophecies")
+
+Mechanisms vary by scenario:
+- Witches' riddles (Macbeth)
+- Deja vu sensations (time loop)
+- Analyst forecasts (economics)
+- Ancestral curses (dynasty)
+
+### Causal Loop System
+
+For bootstrap paradoxes where events cause themselves:
+
+1. Detect opportunities for loop closure ("this event could be what caused X in cycle 1")
+2. Enforce closure by rewriting states to create explicit causal links
+3. Validate that all opened loops eventually close
+
+This enables legitimate bootstrap paradoxes—but only within CYCLICAL mode's relaxed causality constraints.
+
+### Fidelity as Cycle-Awareness
+
+| Position | Fidelity | Why |
+|----------|----------|-----|
+| Cycle boundaries | DIALOG | The "seam" where patterns become visible |
+| Prophecy moments | TRAINED | High-stakes narrative pivots |
+| Mid-cycle events | SCENE | The repeating "texture" |
+| Variation points | DIALOG | Where this cycle diverges from archetype |
+
+### Implementation
+
+```bash
+./run.sh run agent4_elk_migration  # Verified Feb 2026
+```
+
+**From `workflows/cyclical_strategy.py`**
+
+**Results**: 5 paths, 5 cycles, prophecy resolution, coherence 0.727
+
+## M7: Causal Temporal Chains
+
+Timepoints form **explicit causal chains**.
+
+### Structure
+
+```python
+class Timepoint(SQLModel, table=True):
+    timepoint_id: str = Field(unique=True, index=True)
+    timeline_id: str | None = Field(default=None, index=True)
+    timestamp: datetime
+    event_description: str
+    entities_present: list[str] = Field(default_factory=list)
+    causal_parent: str | None = Field(default=None, index=True)
+    resolution_level: ResolutionLevel = Field(default=ResolutionLevel.SCENE)
+    run_id: str | None = Field(default=None, index=True)
+```
+
+**From `schemas.py:307-316`**
+
+### Validation Constraint
+
+Entity at timepoint T can **only reference information** from timepoints T' where a causal path exists from T' to T.
+
+This prevents anachronisms **structurally**, not heuristically.
+
+## M8: Vertical Timepoint Expansion
+
+Timepoints can be expanded **vertically**—adding detail within a moment rather than progressing to the next moment.
+
+A "board meeting" timepoint might expand into:
+- Arrival
+- Opening remarks
+- Key debate
+- Decision
+- Aftermath
+
+All causally linked but **temporally simultaneous**.
+
+## M12: Counterfactual Branching
+
+Create alternate timelines from intervention points.
+
+### Implementation
+
+```python
+def create_counterfactual_branch(parent_timeline, intervention_point, intervention):
+    branch = Timeline(parent_id=parent_timeline.id, branch_point=intervention_point)
+    
+    # Copy timepoints before intervention
+    for tp in parent_timeline.get_timepoints_before(intervention_point):
+        branch.add_timepoint(tp.deep_copy())
+    
+    # Apply intervention at branch point
+    branch_tp = parent_timeline.get_timepoint(intervention_point).deep_copy()
+    apply_intervention(branch_tp, intervention)
+    branch.add_timepoint(branch_tp)
+    
+    # Propagate causal effects forward
+    propagate_causal_effects(branch, intervention_point)
+    
+    return branch
+```
+
+Enables "what if Madison hadn't shared his notes?" queries with proper causal propagation.
+
+### Castaway Colony Example
+
+At Day 7, Commander Tanaka's decision spawns **three counterfactual branches**:
+
+**Branch A (Fortify & Wait)**:
+- Copies all state before Day 7
+- Propagates conservative resource consumption forward
+
+**Branch B (Explore & Adapt)**:
+- Applies exploration interventions
+- Sending teams out
+- Accumulating injuries and discoveries
+
+**Branch C (Repair & Signal)**:
+- Commits all resources to beacon repair
+
+Each branch is **internally consistent**:
+- Branch B can't use cave shelter discovered in Branch A's timeline
+- Branch C can't benefit from food sources found during Branch B's exploration
+
+### Scenario Anchoring
+
+BRANCHING mode forward steps are anchored to the scenario premise via:
+
+1. **Scenario Anchor Block**: First 800 chars of `scenario_description` with explicit "do NOT drift" instruction
+2. **Entity Roster**: Rich role descriptions from template's `entity_roster`
+3. **Accumulated World State**: Persistent store tracks `key_events_history`, `resource_states`, `monitoring`
+
+This prevents the LLM from abandoning the scenario (e.g., turning a Kepler-442b colony into a VR narrative).
+
+## M14: Circadian Activity Patterns
+
+Entities have **activity probabilities** that vary with time of day.
+
+### Implementation
+
+```python
+def get_activity_probability(hour: int, activity: str) -> float:
+    probability_map = {
+        "sleep": lambda h: 0.95 if 0 <= h < 6 else 0.05,
+        "work": lambda h: 0.7 if 9 <= h < 17 else 0.1,
+        "social": lambda h: 0.6 if 18 <= h < 23 else 0.2,
+    }
+    return probability_map.get(activity, lambda h: 0.0)(hour)
+```
+
+This constrains entity behavior plausibly without requiring explicit scheduling logic.
+
+### Energy Budget Integration
+
+From `validation.py:98-137`:
+
+```python
+@Validator.register("energy_budget", "WARNING")
+def validate_energy_budget(entity: Entity, context: dict) -> dict:
+    # Base cost per knowledge item
+    base_expenditure = new_knowledge_count * 5
+    
+    # Apply circadian adjustments if timepoint available
+    if timepoint and circadian_config:
+        activity_type = context.get("activity_type", "work")
+        expenditure = compute_energy_cost_with_circadian(
+            activity_type, 
+            timepoint.timestamp.hour, 
+            base_expenditure, 
+            circadian_config
+        )
+    
+    if expenditure > budget * 1.2:  # Allow 20% temporary excess
+        return {"valid": False, "message": f"Energy expenditure exceeds budget"}
+    return {"valid": True, "message": "Energy budget satisfied"}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Knowledge Provenance" icon="diagram-project" href="/mechanisms/knowledge-provenance">
+    Who knows what, from whom, when
+  </Card>
+  <Card title="Entity Simulation" icon="users" href="/mechanisms/entity-simulation">
+    Dialog synthesis and entity behavior
+  </Card>
+</CardGroup>

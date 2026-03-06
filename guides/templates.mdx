@@ -1,0 +1,388 @@
+---
+title: 'Templates'
+description: 'Create and modify scenario templates for Timepoint Pro simulations'
+---
+
+## Overview
+
+Templates are the "patches" that define reproducible simulation scenarios in Timepoint Pro. Like presets on a synthesizer, they capture a complete configuration—entities, temporal mode, fidelity settings, and output formats—that can be loaded and run repeatedly.
+
+## Template Structure
+
+Templates are JSON files stored in `generation/templates/` with the following structure:
+
+```json
+{
+  "scenario_description": "High-level description of the scenario",
+  "world_id": "unique_identifier",
+  "patch": {
+    "name": "Display Name",
+    "category": "corporate|historical|crisis|mystical|etc",
+    "tags": ["conflict", "decision", "negotiation"],
+    "author": "your-name",
+    "version": "1.0",
+    "description": "Detailed description of what this template does"
+  },
+  "entities": { ... },
+  "timepoints": { ... },
+  "temporal": { ... },
+  "outputs": { ... }
+}
+```
+
+## Key Sections
+
+### Entities Configuration
+
+Defines the population of entities in your simulation:
+
+```json
+"entities": {
+  "count": 5,
+  "types": ["human"],
+  "initial_resolution": "tensor_only",
+  "animism_level": 0,
+  "envelope": {
+    "attack": 0.15,
+    "decay": 0.1,
+    "sustain": 0.8,
+    "release": 0.2
+  },
+  "adprs_envelopes": [
+    {
+      "A": 0.7,
+      "D": 31536000000,
+      "P": 2.0,
+      "R": 0,
+      "S": 0.8,
+      "t0": "2026-01-01T00:00:00+00:00",
+      "baseline": 0.1
+    }
+  ]
+}
+```
+
+**Key fields:**
+- `count`: Number of entities to generate
+- `types`: Entity types (`"human"`, `"animal"`, `"building"`, `"kami"`, `"abstract"`, `"any"`, `"ai"`)
+- `initial_resolution`: Starting fidelity level (`"tensor_only"`, `"basic_profile"`, `"full_context"`)
+- `envelope`: ADSR envelope for entity lifecycle (Attack, Decay, Sustain, Release)
+- `adprs_envelopes`: SynthasAIzer waveform envelopes for temporal state evolution
+
+### Timepoints Configuration
+
+Defines the temporal structure:
+
+```json
+"timepoints": {
+  "count": 3,
+  "start_time": null,
+  "resolution": "hour",
+  "before_count": 0,
+  "after_count": 0
+}
+```
+
+**Key fields:**
+- `count`: Number of timepoints to simulate
+- `resolution`: Time granularity (`"second"`, `"minute"`, `"hour"`, `"day"`, `"week"`)
+- `before_count`/`after_count`: Optional timepoints before/after the main sequence
+
+### Temporal Mode Configuration
+
+Defines causality model and mode-specific parameters:
+
+```json
+"temporal": {
+  "mode": "forward",
+  "enable_counterfactuals": false,
+  "fidelity_planning_mode": "hybrid",
+  "token_budget_mode": "soft",
+  "token_budget": 80000.0,
+  "fidelity_template": "balanced"
+}
+```
+
+**Temporal modes:**
+- `"forward"`: Strict forward causality (default)
+- `"portal"`: Backward reasoning from a target state
+- `"branching"`: Counterfactual timeline splits
+- `"cyclical"`: Seasonal/cyclical patterns with prophecy
+- `"directorial"`: Dramatic tension drives causality
+
+**Portal mode specific:**
+```json
+"temporal": {
+  "mode": "portal",
+  "portal_description": "Failed Mars mission with life support failure",
+  "portal_year": 2031,
+  "origin_year": 2026,
+  "backward_steps": 15,
+  "exploration_mode": "adaptive",
+  "coherence_threshold": 0.7,
+  "use_simulation_judging": false
+}
+```
+
+### Output Configuration
+
+Defines what artifacts to generate:
+
+```json
+"outputs": {
+  "formats": ["json", "markdown"],
+  "include_dialogs": true,
+  "include_relationships": true,
+  "include_knowledge_flow": true,
+  "export_ml_dataset": false,
+  "generate_narrative_exports": true,
+  "narrative_export_formats": ["markdown", "json", "pdf"],
+  "narrative_detail_level": "summary",
+  "enhance_narrative_with_llm": true
+}
+```
+
+## Example Templates
+
+### Board Meeting (Forward Mode)
+
+From `generation/templates/showcase/board_meeting.json`:
+
+```json
+{
+  "scenario_description": "Tech startup board meeting where CEO proposes an acquisition",
+  "world_id": "board_meeting_example",
+  "patch": {
+    "name": "Boardroom Brass",
+    "category": "corporate",
+    "tags": ["conflict", "decision", "multi-entity", "negotiation"]
+  },
+  "entities": {
+    "count": 5,
+    "types": ["human"],
+    "initial_resolution": "tensor_only"
+  },
+  "timepoints": {
+    "count": 3,
+    "resolution": "hour"
+  },
+  "temporal": {
+    "mode": "forward"
+  }
+}
+```
+
+**Mechanisms exercised:** M1 (Heterogeneous Fidelity), M7 (Causal Chains), M11 (Dialog Synthesis), M13 (Relationship Evolution)
+
+**Cost estimate:** ~$0.05 | **Duration:** ~2 minutes
+
+### Mars Mission Portal (Portal Mode)
+
+From `generation/templates/showcase/mars_mission_portal.json`:
+
+```json
+{
+  "scenario_description": "Portal backward reasoning from failed Mars mission to root causes across 5 years",
+  "temporal": {
+    "mode": "portal",
+    "portal_description": "Ares III Mars mission fails in 2031 with life support failure during EVA",
+    "portal_year": 2031,
+    "origin_year": 2026,
+    "backward_steps": 15,
+    "exploration_mode": "adaptive",
+    "coherence_threshold": 0.7
+  }
+}
+```
+
+**Mechanisms exercised:** M17 (Modal Causality), M3 (Exposure Events), M7 (Causal Chains), M8 (Embodied States), M11 (Dialog), M13 (Relationships)
+
+**Cost estimate:** ~$0.40 | **Duration:** ~15 minutes
+
+## Creating a New Template
+
+### Step 1: Start with a Base
+
+Copy an existing template from `generation/templates/showcase/` that matches your use case:
+
+```bash
+cp generation/templates/showcase/board_meeting.json \
+   generation/templates/showcase/my_scenario.json
+```
+
+### Step 2: Edit Core Fields
+
+Update the scenario description, world ID, and patch metadata:
+
+```json
+{
+  "scenario_description": "Your scenario description",
+  "world_id": "my_unique_scenario_id",
+  "patch": {
+    "name": "Your Scenario Name",
+    "category": "your_category",
+    "tags": ["relevant", "tags"],
+    "author": "your-name",
+    "version": "1.0",
+    "description": "Detailed description"
+  }
+}
+```
+
+### Step 3: Configure Entities
+
+Adjust entity count, types, and resolution:
+
+```json
+"entities": {
+  "count": 8,
+  "types": ["human", "animal", "building"],
+  "initial_resolution": "basic_profile",
+  "animism_level": 2
+}
+```
+
+### Step 4: Set Temporal Mode
+
+Choose the appropriate causality model:
+
+```json
+"temporal": {
+  "mode": "branching",
+  "enable_counterfactuals": true,
+  "fidelity_template": "high_detail"
+}
+```
+
+### Step 5: Register in Catalog
+
+Add your template to `generation/templates/catalog.json`:
+
+```json
+"templates": {
+  "showcase/my_scenario": {
+    "name": "My Scenario",
+    "description": "Brief description",
+    "mechanisms": ["M7", "M11", "M13"],
+    "tier": "standard",
+    "category": "showcase",
+    "cost_estimate": "$0.10",
+    "duration_estimate": "4min",
+    "status": "pending"
+  }
+}
+```
+
+### Step 6: Test Your Template
+
+Run your template and verify it works:
+
+```bash
+./run.sh run my_scenario
+```
+
+## Template Categories
+
+Templates are organized by category in the catalog:
+
+- **corporate**: Business scenarios (board meetings, VC pitches)
+- **historical**: Historical events (Jefferson Dinner)
+- **crisis**: High-stakes emergencies (hospital crisis)
+- **mystical**: Supernatural/spiritual scenarios (kami shrine)
+- **mystery**: Detective/investigation scenarios
+- **portal**: Portal mode backward reasoning
+- **space**: Space exploration scenarios
+- **legal**: Legal proceedings and investigations
+- **persona**: Agent persona demonstrations
+
+## Template Tiers
+
+### Quick Tier
+- **Entities:** 2-3
+- **Timepoints:** 1-2  
+- **Cost:** Less than $0.05
+- **Duration:** Under 1 minute
+- **Use case:** Fast validation tests
+
+### Standard Tier
+- **Entities:** 4-6
+- **Timepoints:** 3-5
+- **Cost:** $0.05-$0.20
+- **Duration:** 1-5 minutes
+- **Use case:** Normal testing with moderate complexity
+
+### Comprehensive Tier
+- **Entities:** 7-10
+- **Timepoints:** 5-10
+- **Cost:** $0.20-$1.00
+- **Duration:** 5-15 minutes
+- **Use case:** Full mechanism exercise with rich scenarios
+
+## Best Practices
+
+### Fidelity Management
+
+Start with low resolution and let the system upgrade on demand:
+
+```json
+"entities": {
+  "initial_resolution": "tensor_only"  // ~200 tokens per entity
+}
+```
+
+Use fidelity templates for common patterns:
+
+```json
+"temporal": {
+  "fidelity_template": "balanced",     // Balanced quality/cost
+  "token_budget_mode": "soft",         // Allow budget overruns
+  "token_budget": 80000.0
+}
+```
+
+### Cost Optimization
+
+1. Use `"initial_resolution": "tensor_only"` to minimize token usage
+2. Set realistic `token_budget` based on your needs
+3. Limit `timepoints.count` to what you need
+4. Use `"export_ml_dataset": false` unless generating training data
+5. Set `"enhance_narrative_with_llm": false` to skip LLM-enhanced narratives
+
+### Temporal Mode Selection
+
+- Use **forward** for standard simulations with strict causality
+- Use **portal** when you know the outcome and want to trace causes backward
+- Use **branching** to explore "what if" scenarios at decision points
+- Use **cyclical** for seasonal patterns or repeating prophecies
+- Use **directorial** when dramatic tension should drive events
+
+## Troubleshooting
+
+### Template Won't Load
+
+Validate JSON syntax:
+```bash
+python -m json.tool generation/templates/showcase/my_scenario.json
+```
+
+### Template Runs Too Long
+
+Reduce complexity:
+- Decrease `entities.count`
+- Decrease `timepoints.count`
+- Use `"initial_resolution": "tensor_only"`
+- Set `"token_budget_mode": "hard"` with lower budget
+
+### Template Too Expensive
+
+Optimize for cost:
+- Use `"fidelity_template": "minimal"`
+- Set `"include_dialogs": false` if dialog not needed
+- Reduce `timepoints.count`
+- Set `"enhance_narrative_with_llm": false`
+
+## Next Steps
+
+- Learn about [Dialog Synthesis](/guides/dialog-synthesis) to understand dialog generation
+- Explore [Cost Optimization](/guides/cost-optimization) for fidelity strategies
+- Read [Training Data](/guides/training-data) if generating datasets for fine-tuning

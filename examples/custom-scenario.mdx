@@ -1,0 +1,962 @@
+---
+title: 'Create a Custom Scenario'
+description: 'Step-by-step guide to building your own Timepoint Pro simulation from scratch'
+icon: 'pen-to-square'
+---
+
+# Building a Custom Scenario
+
+This guide walks you through creating a new Timepoint Pro simulation template from scratch—from initial concept to a working, reproducible scenario.
+
+## Overview: The Template Workflow
+
+<Steps>
+  <Step title="Define the scenario">
+    What social system are you simulating? What's the core conflict or decision?
+  </Step>
+  
+  <Step title="Design the entity roster">
+    Who are the key actors? What types (human, abstract, building)? What roles and knowledge?
+  </Step>
+  
+  <Step title="Choose temporal mode">
+    FORWARD, PORTAL, BRANCHING, CYCLICAL, or DIRECTORIAL?
+  </Step>
+  
+  <Step title="Configure mechanisms">
+    Which of the 19 mechanisms does your scenario need?
+  </Step>
+  
+  <Step title="Write the JSON template">
+    Create the configuration file
+  </Step>
+  
+  <Step title="Test and iterate">
+    Run, analyze, refine
+  </Step>
+</Steps>
+
+## Example: Climate Summit Negotiation
+
+Let's build a **2030 climate summit** scenario where 6 nations negotiate emissions targets. We'll use BRANCHING mode to explore different negotiation strategies.
+
+### Step 1: Define the Scenario
+
+<AccordionGroup>
+  <Accordion title="Core Concept" icon="lightbulb">
+    **Setting**: 2030 UN climate summit, 72-hour negotiation window
+    
+    **Central Conflict**: Developed nations want binding targets; developing nations demand financial assistance first
+    
+    **Branching Decision**: Day 2, after initial proposals fail—do negotiators:
+    - **Branch A**: Compromise on phased targets
+    - **Branch B**: Walk away from talks
+    - **Branch C**: Create coalition of willing (subset agreement)
+    
+    **Success Metric**: Treaty signed with sufficient enforcement mechanisms
+  </Accordion>
+  
+  <Accordion title="Why This Works for SNAG" icon="check">
+    ✅ **Multiple actors** with distinct interests (developed vs. developing nations)
+    
+    ✅ **Knowledge provenance matters**: Who proposed what compromise? Who knows about back-channel negotiations?
+    
+    ✅ **Relationship dynamics**: Trust between negotiators evolves; coalitions form and dissolve
+    
+    ✅ **Quantitative state**: Emissions targets (gigatons CO2), financial commitments ($B), voting blocs (count)
+    
+    ✅ **Counterfactual value**: What if the US had compromised earlier? What if China formed coalition with EU?
+  </Accordion>
+</AccordionGroup>
+
+### Step 2: Design the Entity Roster
+
+<CardGroup cols={3}>
+  <Card title="USA Envoy" icon="flag-usa">
+    **Type**: Human
+    
+    **Role**: Developed nation negotiator, pushes for binding targets but faces domestic political pressure
+    
+    **Archetype**: `diplomat`
+    
+    **Initial knowledge**:
+    - US emissions baseline
+    - Domestic political constraints
+    - Historical commitments
+  </Card>
+  
+  <Card title="China Envoy" icon="flag">
+    **Type**: Human
+    
+    **Role**: Largest emitter, demands developing nation status, pivotal vote
+    
+    **Archetype**: `diplomat`
+    
+    **Initial knowledge**:
+    - China's industrial growth targets
+    - Belt & Road carbon footprint
+    - Regional coalition options
+  </Card>
+  
+  <Card title="EU Chief" icon="earth-europe">
+    **Type**: Human
+    
+    **Role**: Most aggressive targets, willing to fund developing nations
+    
+    **Archetype**: `diplomat`
+    
+    **Initial knowledge**:
+    - EU Green Deal commitments
+    - Climate fund allocation
+    - Technical assistance programs
+  </Card>
+  
+  <Card title="India Rep" icon="om">
+    **Type**: Human
+    
+    **Role**: Developing nation, demands financial assistance before commitments
+    
+    **Archetype**: `politician`
+    
+    **Initial knowledge**:
+    - India's energy poverty data
+    - Renewable capacity plans
+    - Historical emissions context
+  </Card>
+  
+  <Card title="Brazil Envoy" icon="tree">
+    **Type**: Human
+    
+    **Role**: Amazon steward, wants payment for carbon sequestration
+    
+    **Archetype**: `scientist`
+    
+    **Initial knowledge**:
+    - Deforestation rates
+    - Carbon credit valuations
+    - Indigenous land rights
+  </Card>
+  
+  <Card title="Small Island States Bloc" icon="island-tropical">
+    **Type**: Abstract (collective entity)
+    
+    **Role**: Existential threat from sea level rise, moral authority
+    
+    **Archetype**: N/A (abstract)
+    
+    **Initial knowledge**:
+    - Projected displacement data
+    - Adaptation cost estimates
+    - Loss and damage framework
+  </Card>
+  
+  <Card title="Global Carbon Budget" icon="chart-line">
+    **Type**: Abstract (physical constraint)
+    
+    **Role**: Remaining CO2 budget for 1.5°C target (animistic entity)
+    
+    **Key state variables**:
+    - `remaining_budget_gt` (gigatons)
+    - `annual_emissions_gt`
+    - `years_to_exhaustion`
+  </Card>
+  
+  <Card title="Public Pressure" icon="people-group">
+    **Type**: Abstract (social force)
+    
+    **Role**: Youth movements, media scrutiny, protests
+    
+    **Key state variables**:
+    - `protest_intensity` (0-1)
+    - `media_coverage_sentiment`
+    - `negotiator_vulnerability`
+  </Card>
+</CardGroup>
+
+### Step 3: Choose Temporal Mode
+
+For this scenario, **BRANCHING mode** makes the most sense:
+
+<Tabs>
+  <Tab title="Why BRANCHING?">
+    The core question is: **"What happens if negotiators choose different strategies?"**
+    
+    - **Branch A (Compromise)**: Phased targets with financial assistance up front
+    - **Branch B (Walk Away)**: Talks collapse, pursue bilateral agreements
+    - **Branch C (Coalition)**: Subset of nations (EU + China + US?) sign partial agreement
+    
+    Each branch simulates forward independently with different relationship dynamics, trust evolution, and resource commitments.
+  </Tab>
+  
+  <Tab title="Alternative: PORTAL">
+    If your question was: **"Starting from a successful 2035 treaty, what decisions in 2030 made it possible?"**
+    
+    Use PORTAL mode to work backward from the endpoint.
+    
+    ```json
+    "temporal": {
+      "mode": "portal",
+      "portal_year": 2035,
+      "origin_year": 2030,
+      "portal_description": "2035: Historic climate treaty in effect with 90% of nations compliant. Trace backward to 2030 summit decisions."
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Alternative: FORWARD">
+    If you just want to simulate the 72-hour negotiation linearly without counterfactuals:
+    
+    ```json
+    "temporal": {
+      "mode": "forward",
+      "narrative_arc": "three_act"
+    }
+    ```
+    
+    Simplest option, no branching overhead.
+  </Tab>
+</Tabs>
+
+### Step 4: Configure Mechanisms
+
+Which of the 19 mechanisms does this scenario need?
+
+<AccordionGroup>
+  <Accordion title="Required Mechanisms" icon="star">
+    **M7: Causal Chains** — Track negotiation timeline (proposal → counter-proposal → compromise)
+    
+    **M11: Dialog Synthesis** — Multi-party negotiation conversations with per-character generation
+    
+    **M13: Relationship Tracking** — Trust/alignment between negotiators evolves
+    
+    **M12: Counterfactual Branching** — Three branches from Day 2 decision point
+    
+    **M3: Knowledge Provenance** — Who proposed the phased targets? Who knows about EU's financial offer?
+  </Accordion>
+  
+  <Accordion title="Optional but Valuable" icon="circle-plus">
+    **M16: Animistic Entities** — Global Carbon Budget and Public Pressure as agents with "wants"
+    
+    **M4: Physics Validation** — Validate emissions math (annual emissions vs. remaining budget)
+    
+    **M15: Entity Prospection** — Negotiators model future outcomes ("If we walk away, bilateral deals take 5+ years")
+    
+    **M19: Knowledge Extraction** — Post-dialog extraction of new negotiation positions
+  </Accordion>
+  
+  <Accordion title="Not Needed" icon="circle-xmark">
+    **M8: Embodied States** — No physical exhaustion tracking needed (could add if simulating jet lag)
+    
+    **M14: Circadian Patterns** — Not critical unless simulating multi-timezone negotiations
+    
+    **M2: Progressive Training** — All entities start at high importance
+    
+    **M17 (PORTAL/CYCLICAL modes)** — Not used in BRANCHING mode
+  </Accordion>
+</AccordionGroup>
+
+### Step 5: Write the JSON Template
+
+Create `generation/templates/showcase/climate_summit_2030.json`:
+
+```json
+{
+  "scenario_description": "2030 UN climate summit: 6 nations negotiate binding emissions targets over 72 hours. Developed nations push for enforcement; developing nations demand financial assistance. Day 2 branching decision: compromise on phased targets, walk away, or create coalition of willing.",
+  "world_id": "climate_summit_2030",
+  "patch": {
+    "name": "Climate Summit 2030",
+    "category": "showcase",
+    "tags": ["climate", "negotiation", "branching", "diplomacy"],
+    "author": "your-name",
+    "version": "1.0",
+    "description": "Multi-nation climate negotiation with counterfactual strategy branching"
+  },
+  "entities": {
+    "count": 8,
+    "types": ["human", "abstract"],
+    "initial_resolution": "dialog",
+    "animism_level": 3
+  },
+  "timepoints": {
+    "count": 6,
+    "start_time": "2030-11-15T09:00:00Z",
+    "resolution": "day",
+    "before_count": 0,
+    "after_count": 0
+  },
+  "temporal": {
+    "mode": "branching",
+    "enable_counterfactuals": true,
+    "dramatic_tension": 0.75,
+    "token_budget": 150000.0,
+    "fidelity_template": "balanced"
+  },
+  "outputs": {
+    "formats": ["jsonl", "json", "markdown"],
+    "include_dialogs": true,
+    "include_relationships": true,
+    "include_knowledge_flow": true,
+    "export_ml_dataset": true
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M3_exposure_events",
+      "M4_physics_validation",
+      "M7_causal_chains",
+      "M11_dialog_synthesis",
+      "M12_counterfactual_branching",
+      "M13_relationship_tracking",
+      "M15_entity_prospection",
+      "M16_animistic_entities",
+      "M19_knowledge_extraction"
+    ],
+    "entity_roster": {
+      "usa_envoy": {
+        "type": "human",
+        "role": "US climate negotiator, pushes for binding targets but faces domestic political pressure",
+        "initial_knowledge": [
+          "US emissions baseline (5.0 Gt CO2/year)",
+          "Domestic political constraints (Senate approval required)",
+          "Historical Paris Agreement commitments"
+        ],
+        "personality_traits": ["diplomatic", "pragmatic", "cautious", "strategic"],
+        "archetype": "diplomat"
+      },
+      "china_envoy": {
+        "type": "human",
+        "role": "China's chief negotiator, largest emitter, pivotal vote",
+        "initial_knowledge": [
+          "China emissions (10.5 Gt CO2/year)",
+          "Belt & Road infrastructure carbon footprint",
+          "Developing nation status claims"
+        ],
+        "personality_traits": ["strategic", "calculated", "long-term", "assertive"],
+        "archetype": "diplomat"
+      },
+      "eu_chief": {
+        "type": "human",
+        "role": "EU chief negotiator, most aggressive targets, offers climate fund",
+        "initial_knowledge": [
+          "EU Green Deal (55% reduction by 2030)",
+          "Climate fund allocation (€100B available)",
+          "Technical assistance programs"
+        ],
+        "personality_traits": ["idealistic", "data-driven", "collaborative", "urgent"],
+        "archetype": "diplomat"
+      },
+      "india_rep": {
+        "type": "human",
+        "role": "India representative, demands financial assistance before commitments",
+        "initial_knowledge": [
+          "India energy poverty (300M without reliable electricity)",
+          "Renewable capacity expansion plans (500 GW by 2030)",
+          "Historical emissions context (per-capita basis)"
+        ],
+        "personality_traits": ["principled", "defensive", "equity-focused", "passionate"],
+        "archetype": "politician"
+      },
+      "brazil_envoy": {
+        "type": "human",
+        "role": "Brazil negotiator, wants payment for Amazon carbon sequestration",
+        "initial_knowledge": [
+          "Amazon deforestation rates (declining but still 10K km²/year)",
+          "Carbon credit valuations ($15/ton CO2)",
+          "Indigenous land rights and forest preservation"
+        ],
+        "personality_traits": ["scientific", "protective", "transactional", "detail-oriented"],
+        "archetype": "scientist"
+      },
+      "small_island_bloc": {
+        "type": "abstract",
+        "role": "Small island states collective, existential threat from sea level rise",
+        "initial_knowledge": [
+          "Projected displacement (15M people by 2050)",
+          "Adaptation costs ($50B annually)",
+          "Loss and damage compensation framework"
+        ],
+        "influence_channels": ["moral_authority", "media_presence", "coalition_building"]
+      },
+      "global_carbon_budget": {
+        "type": "abstract",
+        "role": "Remaining CO2 budget for 1.5°C target (animistic entity)",
+        "initial_knowledge": [],
+        "influence_channels": ["physical_constraint", "urgency_signal", "depletion_timeline"],
+        "key_state_variables": {
+          "remaining_budget_gt": 400,
+          "annual_emissions_gt": 42,
+          "years_to_exhaustion": 9.5
+        }
+      },
+      "public_pressure": {
+        "type": "abstract",
+        "role": "Youth movements, media scrutiny, protests outside summit",
+        "initial_knowledge": [],
+        "influence_channels": ["protest_intensity", "media_coverage", "negotiator_accountability"],
+        "key_state_variables": {
+          "protest_intensity": 0.65,
+          "media_coverage_sentiment": 0.45,
+          "negotiator_vulnerability": 0.50
+        }
+      }
+    },
+    "branching_points": [
+      {
+        "timepoint": "tp_002",
+        "day": 2,
+        "trigger": "Initial proposals fail to gain consensus. Negotiators must choose strategy.",
+        "branches": {
+          "branch_a_compromise": {
+            "label": "Phased Targets with Up-Front Funding",
+            "description": "Developed nations commit €80B climate fund immediately; developing nations accept phased binding targets (2035 compliance). Moderate risk, builds trust.",
+            "resource_bias": "financial_commitment",
+            "risk_profile": "moderate",
+            "key_constraint": "developed_nations_funding >= 80B AND developing_nations_accept_phased"
+          },
+          "branch_b_walkaway": {
+            "label": "Collapse Talks, Pursue Bilateral Deals",
+            "description": "Summit ends without agreement. Nations pursue bilateral/regional agreements (US-EU, China-ASEAN, etc.). Slower progress, fragmented approach.",
+            "resource_bias": "autonomy",
+            "risk_profile": "high_risk_low_reward",
+            "key_constraint": "trust_degradation AND bilateral_timeline > 5_years"
+          },
+          "branch_c_coalition": {
+            "label": "Coalition of Willing (Partial Agreement)",
+            "description": "EU + US + China + willing others (60% of global emissions) sign binding agreement; others opt out. Fast progress but incomplete coverage.",
+            "resource_bias": "coalition_building",
+            "risk_profile": "medium_risk_medium_reward",
+            "key_constraint": "coalition_coverage >= 0.60 AND opt_out_nations_alienated"
+          }
+        }
+      }
+    ],
+    "quantitative_tracking": {
+      "emissions_commitments": {
+        "unit": "gigatons_CO2_per_year",
+        "baseline_global": 42.0,
+        "target_reduction_pct": 45,
+        "compliance_year": 2035
+      },
+      "climate_fund": {
+        "unit": "billions_EUR",
+        "eu_offer": 100,
+        "us_conditional_offer": 40,
+        "total_developing_nation_ask": 200
+      },
+      "remaining_carbon_budget": {
+        "unit": "gigatons_CO2",
+        "initial": 400,
+        "depletion_rate": "42_gt_per_year",
+        "years_to_1.5C_breach": 9.5
+      }
+    }
+  },
+  "max_cost_usd": 2.0,
+  "enable_checkpoints": true,
+  "checkpoint_interval": 3
+}
+```
+
+### Step 6: Test and Iterate
+
+<Steps>
+  <Step title="Validate the template">
+    ```bash
+    # Check JSON syntax
+    python -m json.tool generation/templates/showcase/climate_summit_2030.json
+    
+    # Dry run (cost estimate without execution)
+    ./run.sh run --dry-run climate_summit_2030
+    ```
+  </Step>
+  
+  <Step title="Run first iteration">
+    ```bash
+    ./run.sh run climate_summit_2030
+    ```
+    
+    Expected cost: ~$0.40-$0.80 (8 entities, 6 timepoints, branching)
+  </Step>
+  
+  <Step title="Analyze outputs">
+    Check:
+    - Are dialogs natural? Do negotiators sound distinct?
+    - Do branches produce meaningfully different outcomes?
+    - Are quantitative states (emissions, funding) tracked correctly?
+    - Does knowledge provenance make sense?
+    
+    ```bash
+    cat datasets/climate_summit_2030/narrative_*.markdown
+    ./run.sh export last --format json
+    ```
+  </Step>
+  
+  <Step title="Refine and re-run">
+    Common adjustments:
+    - Adjust `dramatic_tension` (higher = more conflict)
+    - Modify entity `personality_traits` for voice distinctiveness
+    - Add more specific `initial_knowledge` items
+    - Tune `token_budget` if hitting limits
+    
+    ```bash
+    # Run 3x for convergence analysis
+    ./run.sh convergence e2e climate_summit_2030 --runs 3
+    ```
+  </Step>
+</Steps>
+
+## Template Anatomy: Key Sections
+
+<AccordionGroup>
+  <Accordion title="scenario_description" icon="file-lines">
+    **Purpose**: Single-paragraph summary of the scenario
+    
+    **Best practices**:
+    - Include timeframe, setting, core conflict
+    - Mention key decision points or branching moments
+    - 2-4 sentences max
+    
+    **Example**:
+    ```json
+    "scenario_description": "2030 UN climate summit: 6 nations negotiate binding emissions targets over 72 hours. Day 2 branching decision after initial proposals fail."
+    ```
+  </Accordion>
+  
+  <Accordion title="entities" icon="users">
+    **Key fields**:
+    - `count`: Total number of entities (humans + abstracts + buildings + animals)
+    - `types`: Array of entity types
+    - `initial_resolution`: Starting fidelity level (`tensor_only`, `scene`, `dialog`, `trained`)
+    - `animism_level`: 0-5, higher = more agency for abstract entities
+    
+    **Resolution guide**:
+    - `tensor_only`: Background entities, lazy elevation
+    - `scene`: Moderate detail, suitable for most scenarios
+    - `dialog`: High detail, per-character dialog generation
+    - `trained`: Maximum detail, expensive
+    
+    **Animism guide**:
+    - 0: No abstract entities
+    - 1-2: Abstract entities as passive forces ("market sentiment")
+    - 3-4: Abstract entities with agency ("crew morale", "carbon budget")
+    - 5: Full animism (buildings "want" things)
+  </Accordion>
+  
+  <Accordion title="timepoints" icon="clock">
+    **Key fields**:
+    - `count`: Number of simulation steps
+    - `resolution`: Time unit (`hour`, `day`, `week`, `month`, `year`)
+    - `start_time`: Optional ISO 8601 timestamp
+    - `before_count` / `after_count`: Padding timepoints
+    
+    **Cost scaling**:
+    - 3 timepoints: ~$0.05-$0.15
+    - 6 timepoints: ~$0.15-$0.50
+    - 10 timepoints: ~$0.30-$1.00
+    
+    **Resolution guide**:
+    - `hour`: High-intensity short events (board meeting, crisis)
+    - `day`: Week-long scenarios (summit, expedition)
+    - `week`: Month-to-year timelines (startup growth)
+    - `month` / `year`: Multi-year arcs (Mars mission)
+  </Accordion>
+  
+  <Accordion title="temporal" icon="timeline">
+    **Mode selection**:
+    ```json
+    "mode": "forward"       // Standard causality
+    "mode": "portal"        // Backward from endpoint
+    "mode": "branching"     // Counterfactual branches
+    "mode": "cyclical"      // Prophecy, mythic time
+    "mode": "directorial"   // Narrative time (flashbacks)
+    ```
+    
+    **Common parameters**:
+    - `dramatic_tension`: 0.0-1.0 (higher = more conflict/arousal)
+    - `token_budget`: Soft/hard limit on total tokens
+    - `fidelity_template`: `minimal`, `balanced`, `dramatic`, or custom
+    
+    **BRANCHING-specific**:
+    ```json
+    "enable_counterfactuals": true,
+    "max_parallel_workers": 4  // Parallel branch simulation
+    ```
+    
+    **PORTAL-specific**:
+    ```json
+    "portal_year": 2035,
+    "origin_year": 2030,
+    "backward_steps": 10,
+    "candidate_antecedents_per_step": 3,
+    "use_simulation_judging": true
+    ```
+  </Accordion>
+  
+  <Accordion title="metadata.entity_roster" icon="address-card">
+    **Per-entity configuration**:
+    ```json
+    "entity_id": {
+      "type": "human",  // or "abstract", "building", "animal"
+      "role": "Brief description of function",
+      "initial_knowledge": [
+        "Fact 1 with specificity",
+        "Fact 2 with numbers/dates"
+      ],
+      "personality_traits": [
+        "diplomatic", "cautious", "strategic"
+      ],
+      "archetype": "diplomat",  // Optional voice profile
+      "initial_fidelity": "dialog",  // Override global
+      "progressive_training_trigger": "query_count >= 3",  // M2
+      "lazy_resolution_trigger": "query_about_X"  // M5
+    }
+    ```
+    
+    **Archetype options** (from `workflows/dialog_archetypes.py`):
+    - `engineer`, `executive_director`, `military_commander`
+    - `scientist`, `politician`, `lawyer`, `diplomat`
+    - `safety_officer`, `doctor`, `journalist`
+  </Accordion>
+  
+  <Accordion title="metadata.branching_points" icon="code-branch">
+    **Define decision points** (BRANCHING mode only):
+    ```json
+    "branching_points": [
+      {
+        "timepoint": "tp_002",
+        "day": 2,
+        "trigger": "What causes this decision?",
+        "branches": {
+          "branch_id": {
+            "label": "Human-readable name",
+            "description": "What happens in this branch",
+            "resource_bias": "conservation|investment|all_in",
+            "risk_profile": "low_risk_low_reward|high_risk_high_reward|binary",
+            "key_constraint": "success_condition"
+          }
+        }
+      }
+    ]
+    ```
+  </Accordion>
+  
+  <Accordion title="metadata.quantitative_tracking" icon="chart-line">
+    **Track numerical state** (M4 validation):
+    ```json
+    "quantitative_tracking": {
+      "resource_name": {
+        "unit": "kg | hours | percentage | dollars",
+        "initial": 100,
+        "depletion_rate": "formula or fixed value",
+        "critical_threshold": 10
+      }
+    }
+    ```
+    
+    **Example** (from Castaway Colony):
+    ```json
+    "o2_reserves": {
+      "unit": "hours",
+      "initial": 336,
+      "depletion_rate": "6_crew * 0.84_kg_per_hour",
+      "critical_threshold": 48
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Pattern: Corporate / Organizational
+
+<CodeGroup>
+```json Board Meeting
+{
+  "entities": {"count": 5, "types": ["human"]},
+  "timepoints": {"count": 3, "resolution": "hour"},
+  "temporal": {"mode": "forward", "dramatic_tension": 0.5},
+  "mechanisms": ["M7", "M11", "M13"]
+}
+```
+
+```json M&A Negotiation
+{
+  "entities": {"count": 6, "types": ["human", "abstract"]},
+  "timepoints": {"count": 5, "resolution": "day"},
+  "temporal": {"mode": "branching", "dramatic_tension": 0.7},
+  "mechanisms": ["M3", "M7", "M11", "M12", "M13", "M15"]
+}
+```
+</CodeGroup>
+
+### Pattern: Crisis / Survival
+
+<CodeGroup>
+```json Hospital ER Shift
+{
+  "entities": {"count": 8, "types": ["human", "abstract"]},
+  "timepoints": {"count": 12, "resolution": "hour"},
+  "temporal": {"mode": "forward"},
+  "mechanisms": ["M8", "M11", "M14"]  // Embodied states, circadian
+}
+```
+
+```json Shipwreck / Colony
+{
+  "entities": {"count": 10, "types": ["human", "abstract", "animal", "building"]},
+  "timepoints": {"count": 10, "resolution": "day"},
+  "temporal": {"mode": "branching", "dramatic_tension": 0.8},
+  "mechanisms": ["M3", "M4", "M8", "M11", "M12", "M16"]  // All 19
+}
+```
+</CodeGroup>
+
+### Pattern: Historical / Counterfactual
+
+<CodeGroup>
+```json 1790 Compromise Dinner
+{
+  "entities": {"count": 3, "types": ["human"]},
+  "timepoints": {"count": 1, "resolution": "hour"},
+  "temporal": {"mode": "forward"},
+  "mechanisms": ["M3", "M7", "M11", "M13"]
+}
+```
+
+```json Cuban Missile Crisis
+{
+  "entities": {"count": 8, "types": ["human", "abstract"]},
+  "timepoints": {"count": 13, "resolution": "day"},
+  "temporal": {"mode": "branching"},
+  "mechanisms": ["M3", "M7", "M11", "M12", "M13", "M15"]
+}
+```
+</CodeGroup>
+
+### Pattern: Backward Reasoning (PORTAL)
+
+<CodeGroup>
+```json Failed Startup Post-Mortem
+{
+  "entities": {"count": 5, "types": ["human"]},
+  "timepoints": {"count": 10, "resolution": "month"},
+  "temporal": {
+    "mode": "portal",
+    "portal_year": 2030,
+    "origin_year": 2025,
+    "portal_description": "Startup shut down in 2030. Trace backward to founding decisions."
+  },
+  "mechanisms": ["M17", "M3", "M7", "M11", "M13"]
+}
+```
+
+```json Disaster Investigation
+{
+  "entities": {"count": 4, "types": ["human"]},
+  "timepoints": {"count": 10, "resolution": "year"},
+  "temporal": {
+    "mode": "portal",
+    "portal_year": 2031,
+    "backward_steps": 10,
+    "use_simulation_judging": true
+  },
+  "mechanisms": ["M17", "M3", "M7", "M8", "M11"]
+}
+```
+</CodeGroup>
+
+## Quick Start Templates
+
+Copy and modify these minimal templates:
+
+<Tabs>
+  <Tab title="Minimal (Quick Test)">
+    ```json
+    {
+      "scenario_description": "Two founders decide on equity split",
+      "world_id": "equity_split_simple",
+      "entities": {"count": 2, "types": ["human"]},
+      "timepoints": {"count": 1, "resolution": "hour"},
+      "temporal": {"mode": "forward"},
+      "outputs": {"formats": ["json", "markdown"]}
+    }
+    ```
+    Cost: ~$0.02 | Duration: ~30s
+  </Tab>
+  
+  <Tab title="Standard (Most Use Cases)">
+    ```json
+    {
+      "scenario_description": "[Your scenario in 2-3 sentences]",
+      "world_id": "your_scenario_id",
+      "entities": {
+        "count": 5,
+        "types": ["human"],
+        "initial_resolution": "dialog"
+      },
+      "timepoints": {
+        "count": 4,
+        "resolution": "day"
+      },
+      "temporal": {
+        "mode": "forward",
+        "dramatic_tension": 0.6,
+        "token_budget": 100000.0
+      },
+      "outputs": {
+        "formats": ["jsonl", "json", "markdown"],
+        "include_dialogs": true,
+        "include_relationships": true
+      },
+      "metadata": {
+        "entity_roster": { /* Define your entities here */ }
+      }
+    }
+    ```
+    Cost: ~$0.15-$0.30 | Duration: ~5-10 min
+  </Tab>
+  
+  <Tab title="Comprehensive (Full Feature)">
+    ```json
+    {
+      "scenario_description": "[Detailed scenario with branching points]",
+      "world_id": "your_complex_scenario",
+      "entities": {
+        "count": 10,
+        "types": ["human", "abstract", "building"],
+        "initial_resolution": "scene",
+        "animism_level": 3
+      },
+      "timepoints": {
+        "count": 8,
+        "resolution": "day",
+        "before_count": 2,
+        "after_count": 3
+      },
+      "temporal": {
+        "mode": "branching",
+        "enable_counterfactuals": true,
+        "dramatic_tension": 0.75,
+        "token_budget": 200000.0,
+        "fidelity_template": "dramatic"
+      },
+      "outputs": {
+        "formats": ["jsonl", "json", "markdown"],
+        "include_dialogs": true,
+        "include_relationships": true,
+        "include_knowledge_flow": true,
+        "export_ml_dataset": true
+      },
+      "metadata": {
+        "mechanisms_featured": ["M3", "M4", "M7", "M11", "M12", "M13", "M16"],
+        "entity_roster": { /* Detailed entity configs */ },
+        "branching_points": [ /* Define branches */ ],
+        "quantitative_tracking": { /* Resource tracking */ }
+      },
+      "max_cost_usd": 2.0
+    }
+    ```
+    Cost: ~$0.50-$1.50 | Duration: ~20-40 min
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Dialogs sound repetitive or AI-like" icon="robot">
+    **Fixes**:
+    1. Add more specific `personality_traits` per entity
+    2. Define `archetype` for voice profiles
+    3. Increase `dramatic_tension` to boost arousal variation
+    4. Add `voice_guide` with `never_says` anti-patterns
+    
+    ```json
+    "voice_guide": {
+      "never_says": [
+        "I understand your concern",
+        "that's a fair point",
+        "let me think about that"
+      ],
+      "disagreement_style": "reframes as principles, cites data"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cost exceeds budget" icon="dollar-sign">
+    **Reduction strategies**:
+    1. Lower `token_budget` and set `token_budget_mode: "hard"`
+    2. Reduce `initial_resolution` to `scene` or `tensor_only`
+    3. Decrease `timepoints.count`
+    4. Use smaller models: `--model qwen/qwen-2.5-7b-instruct`
+    5. Disable expensive mechanisms (M2 progressive training)
+    
+    ```json
+    "temporal": {
+      "token_budget": 50000.0,
+      "token_budget_mode": "hard",
+      "fidelity_template": "minimal"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Entities lack distinct voices" icon="user-slash">
+    **Fixes**:
+    1. Assign different `archetype` values per entity
+    2. Add entity-specific `speech_examples` in metadata
+    3. Diversify `personality_traits` (avoid all "diplomatic")
+    4. Use per-turn dialog synthesis (enabled by default)
+    
+    ```json
+    "personality_traits": ["analytical", "reserved", "cautious", "precise"],
+    "speech_examples": [
+      "If I'm reading the data correctly, we're seeing a 3.2% drift...",
+      "I could be wrong, but the redundancy numbers don't add up."
+    ]
+    ```
+  </Accordion>
+  
+  <Accordion title="Quantitative state tracking not working" icon="chart-line">
+    **Fixes**:
+    1. Ensure M4 is in `mechanisms_featured`
+    2. Define explicit constraints in `quantitative_tracking`
+    3. Use abstract entities for physical systems ("Carbon Budget")
+    
+    ```json
+    "mechanisms_featured": ["M4_physics_validation"],
+    "quantitative_tracking": {
+      "resource_name": {
+        "unit": "kg",
+        "initial": 100,
+        "critical_threshold": 10
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Your Template" icon="play">
+    ```bash
+    ./run.sh run your_template_id
+    ```
+  </Card>
+  
+  <Card title="Convergence Testing" icon="rotate">
+    ```bash
+    ./run.sh convergence e2e your_template_id --runs 3
+    ```
+  </Card>
+  
+  <Card title="Study Existing Templates" icon="folder-open">
+    Browse `generation/templates/showcase/` for patterns
+  </Card>
+  
+  <Card title="Mechanism Deep Dive" icon="book">
+    Read MECHANICS.md for implementation details
+  </Card>
+</CardGroup>
+
+<Note>
+**Best Practice**: Start with a minimal template (2-3 entities, 1-2 timepoints) to validate your scenario concept before scaling to full complexity. The board_meeting template is a perfect reference.
+</Note>

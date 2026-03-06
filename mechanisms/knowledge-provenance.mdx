@@ -1,0 +1,458 @@
+---
+title: "Knowledge Provenance"
+description: "M3, M4, M19 - Track who knows what, from whom, when"
+---
+
+## The Core Insight
+
+Entities shouldn't **magically know things**. Every piece of knowledge should have a traceable origin—who learned what, from whom, when, with what confidence.
+
+**Key principle**: `entity.knowledge_state ⊆ {e.information for e in entity.exposure_events}`
+
+An entity cannot know something without a recorded exposure event explaining how they learned it.
+
+## M3: Exposure Event Tracking
+
+Knowledge acquisition is logged as **exposure events**.
+
+### Data Structure
+
+```python
+class ExposureEvent(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    entity_id: str = Field(foreign_key="entity.entity_id", index=True)
+    event_type: str  # witnessed, learned, told, experienced
+    information: str  # The knowledge item
+    source: str | None = None  # Another entity or external source
+    timestamp: datetime
+    confidence: float = Field(default=1.0)  # 0.0-1.0
+    timepoint_id: str | None = Field(default=None, index=True)
+    run_id: str | None = Field(default=None, index=True)
+```
+
+**From `schemas.py:277-286`**
+
+### Event Types
+
+| Type | Description | Example |
+|------|-------------|--------|
+| **witnessed** | Direct observation | Seeing a meeting happen |
+| **learned** | Formal instruction | Training session |
+| **told** | Communicated by another entity | Gossip, reports |
+| **experienced** | Personal involvement | Participating in an event |
+
+### Validation Constraint
+
+From `validation.py:63-94`:
+
+```python
+@Validator.register("information_conservation", "ERROR")
+def validate_information_conservation(entity: Entity, context: dict, store=None):
+    # Query actual exposure events from database
+    if store:
+        entity_id = getattr(entity, "entity_id", "")
+        exposure_events = store.get_exposure_events(entity_id)
+        exposure = set(event.information for event in exposure_events)
+    
+    # Get knowledge state
+    knowledge = set(entity.entity_metadata.get("knowledge_state", []))
+    
+    # Check for unknown knowledge
+    unknown = knowledge - exposure
+    if unknown:
+        return {
+            "valid": False, 
+            "message": f"Entity knows about {unknown} without exposure"
+        }
+    return {"valid": True, "message": "Information conservation satisfied"}
+```
+
+This is a **structural** constraint: knowledge cannot exceed exposure history. No magic knowledge.
+
+### Causal Audit Trail
+
+Exposure events form a **DAG** (Directed Acyclic Graph):
+- **Nodes**: Information items
+- **Edges**: Causal relationships (who learned from whom)
+
+Walking the graph:
+- Validates information accessibility
+- Enables counterfactual reasoning ("if Jefferson hadn't received that letter...")
+- Supports temporal consistency checks
+
+## M4: Constraint Enforcement
+
+Five validators enforce consistency using **conservation-law metaphors**.
+
+### 1. Information Conservation (Shannon Entropy)
+
+**Law**: Knowledge state cannot exceed exposure history.
+
+Implementation above in M3 section.
+
+### 2. Energy Budget (Thermodynamic)
+
+Entities have **bounded cognitive/physical energy** per timepoint.
+
+From `validation.py:98-137`:
+
+```python
+@Validator.register("energy_budget", "WARNING")
+def validate_energy_budget(entity: Entity, context: dict):
+    # Get current and previous knowledge
+    budget = entity.entity_metadata.get("energy_budget", 100)
+    current_knowledge = set(entity.entity_metadata.get("knowledge_state", []))
+    previous_knowledge = set(context.get("previous_knowledge", []) or [])
+    new_knowledge_count = len(current_knowledge - previous_knowledge)
+    
+    # Base cost per knowledge item
+    base_expenditure = new_knowledge_count * 5
+    
+    # Apply circadian adjustments
+    timepoint = context.get("timepoint")
+    if timepoint and circadian_config:
+        activity_type = context.get("activity_type", "work")
+        expenditure = compute_energy_cost_with_circadian(
+            activity_type, 
+            timepoint.timestamp.hour, 
+            base_expenditure, 
+            circadian_config
+        )
+    
+    if expenditure > budget * 1.2:  # Allow 20% temporary excess
+        return {
+            "valid": False,
+            "message": f"Energy expenditure {expenditure:.1f} exceeds budget {budget}"
+        }
+    return {"valid": True, "message": "Energy budget satisfied"}
+```
+
+### 3. Behavioral Inertia
+
+Personality traits persist; sudden changes require justification.
+
+From `validation.py:140-160`:
+
+```python
+@Validator.register("behavioral_inertia", "WARNING")
+def validate_behavioral_inertia(entity: Entity, context: dict):
+    if "previous_personality" not in context or not context["previous_personality"]:
+        return {"valid": True, "message": "No previous state to compare"}
+    
+    current = np.array(entity.entity_metadata.get("personality_traits", []))
+    previous = np.array(context["previous_personality"])
+    
+    # Handle different length arrays
+    min_len = min(len(current), len(previous))
+    current = current[:min_len]
+    previous = previous[:min_len]
+    
+    drift = np.linalg.norm(current - previous)
+    if drift > 1.0:  # Threshold for significant personality change
+        return {
+            "valid": False, 
+            "message": f"Personality drift {drift:.2f} exceeds threshold 1.0"
+        }
+    return {"valid": True, "message": "Behavioral inertia satisfied"}
+```
+
+### 4. Biological Constraints
+
+Physical limitations (illness, fatigue, location) constrain behavior.
+
+From `validation.py:163-189`:
+
+```python
+@Validator.register("biological_constraints", "ERROR")
+def validate_biological_constraints(entity: Entity, context: dict):
+    age = entity.entity_metadata.get("age", 0)
+    action = context.get("action", "")
+    violations = []
+    
+    # Age-based constraint checks
+    if age > 100 and "physical_labor" in action:
+        violations.append(f"age {age} incompatible with physical labor")
+    if (age < 18 or age > 50) and "childbirth" in action:
+        violations.append(f"age {age} outside plausible childbirth range (18-50)")
+    if age < 5 and any(a in action for a in ["negotiate", "strategic_planning", "combat"]):
+        violations.append(f"age {age} incompatible with {action}")
+    if age > 80 and any(a in action for a in ["sprint", "heavy_lifting", "combat"]):
+        violations.append(f"age {age} incompatible with {action}")
+    
+    if violations:
+        return {"valid": False, "message": "; ".join(violations)}
+    return {"valid": True, "message": "Biological constraints satisfied"}
+```
+
+### 5. Network Flow
+
+Information propagation respects relationship topology.
+
+Entities can only share knowledge if they have a relationship path. Knowledge doesn't teleport across disconnected subgraphs.
+
+### Castaway Colony Example
+
+Constraint enforcement blocks invalid states:
+
+- Engineer can't repair the beacon **without** the power coupling from the debris field
+- Nobody survives outside during radiation storms
+- Fatigue accumulates, limiting physical labor capacity
+
+**Note**: Specific numerical values (O2 rates, water capacity, radiation levels) in simulation output are **LLM-generated narrative**, not computed by the engine. The engine enforces **structural constraints** (information conservation, energy budgets, behavioral inertia), not physics calculations.
+
+## M19: Knowledge Extraction Agent
+
+The problem: Naive approaches to extracting knowledge from dialog produce **garbage**.
+
+### The Old Problem (Pre-M19)
+
+```python
+# BROKEN: Naive capitalization-based extraction
+def extract_knowledge_references(content: str) -> List[str]:
+    words = content.split()
+    knowledge_items = []
+    for word in words:
+        clean_word = word.strip('.,!?;:"\'-()')
+        if clean_word and len(clean_word) > 3 and clean_word[0].isupper():
+            knowledge_items.append(clean_word.lower())
+    return list(set(knowledge_items))
+
+# Result: ["we'll", "thanks", "what", "michael", "i've"]  # TRASH
+```
+
+This catches:
+- Sentence-initial words
+- Contractions
+- Common words
+- Names without context
+
+### The M19 Solution
+
+An **LLM-based Knowledge Extraction Agent** that understands semantic meaning.
+
+From `workflows/knowledge_extraction.py:1-22`:
+
+```python
+"""
+LLM-based knowledge extraction from dialog turns.
+
+Replaces naive capitalization-based extraction with an intelligent agent
+that understands semantic meaning and extracts only valuable knowledge items.
+
+The agent is passed:
+1. The dialog turns to analyze
+2. Causal graph context (what knowledge already exists)
+3. Entity metadata (who is speaking, who is listening)
+
+It returns structured KnowledgeItem objects with:
+- Semantic content (complete thoughts, not single words)
+- Speaker/listener attribution
+- Category (fact, decision, opinion, plan, revelation, question, agreement)
+- Confidence and causal relevance scores
+"""
+```
+
+### Data Structure
+
+```python
+class KnowledgeItem(BaseModel):
+    content: str           # Complete semantic unit (not a single word!)
+    speaker: str           # Entity who communicated this
+    listeners: List[str]   # Entities who received it
+    category: str          # fact, decision, opinion, plan, revelation, question, agreement
+    confidence: float      # 0.0-1.0, extraction confidence
+    context: str | None    # Why this matters in the scene
+    source_turn_index: int | None  # Which turn (0-indexed)
+    causal_relevance: float # 0.0-1.0, importance for causal chain
+```
+
+**From `schemas.py:455-473`**
+
+### What Gets Extracted
+
+**Good extractions** (complete semantic units):
+- "Michael believes the project deadline is unrealistic"
+- "The board approved the $2M budget increase"
+- "Sarah revealed that the prototype failed last week"
+- "They agreed to postpone the launch until Q3"
+
+**Not extracted** (correctly ignored):
+- Greetings: "Hello", "Thanks", "Good morning"
+- Contractions: "We'll", "I've", "That's"
+- Single names without context: "Michael", "Sarah"
+- Filler words: "What", "Well", "Actually"
+
+### Knowledge Categories
+
+| Category | Description | Example |
+|----------|-------------|---------||
+| **fact** | Verifiable information | "The meeting is at 3pm" |
+| **decision** | Choice communicated | "We decided to pivot to B2B" |
+| **opinion** | Subjective view | "I think the design needs work" |
+| **plan** | Intended future action | "We'll launch in March" |
+| **revelation** | New information changing understanding | "The competitor already filed the patent" |
+| **question** | Only if reveals information itself | "Did you know about the acquisition?" |
+| **agreement** | Consensus reached | "We all agree on the pricing" |
+
+### RAG-Aware Prompting
+
+The agent receives **causal context** from existing exposure events to:
+
+1. **Avoid redundant extraction** - Don't store facts already in the system
+2. **Recognize novel information** - New facts worth storing
+3. **Understand relationships** - How new knowledge connects to existing
+
+```python
+def build_causal_context(entities, store):
+    """Build context from existing knowledge for the extraction agent."""
+    for entity in entities:
+        # Get recent exposure events
+        exposures = store.get_exposure_events(entity.entity_id, limit=10)
+        # Include static knowledge from metadata
+        static = entity.entity_metadata.get("knowledge_state", [])
+        # Format as context for LLM
+        ...
+```
+
+### Integration with Dialog Synthesis (M11)
+
+M19 is called automatically during dialog synthesis.
+
+From `workflows/dialog_synthesis.py` (conceptual flow):
+
+```python
+# 1. Generate dialog (M11)
+dialog_data = llm.generate_dialog(prompt, max_tokens=2000)
+
+# 2. Extract knowledge using M19 agent
+extraction_result = extract_knowledge_from_dialog(
+    dialog_turns=dialog_data.turns,
+    entities=entities,
+    timepoint=timepoint,
+    llm=llm,
+    store=store
+)
+
+# 3. Create exposure events for listeners (M19→M3)
+exposure_events_created = create_exposure_events_from_knowledge(
+    extraction_result=extraction_result,
+    timepoint=timepoint,
+    store=store
+)
+```
+
+Knowledge flows: **Dialog → M19 extraction → M3 exposure events → Entity knowledge state**
+
+### Model Selection
+
+Knowledge extraction uses M18 model selection with specific requirements:
+
+```python
+ActionType.KNOWLEDGE_EXTRACTION: {
+    "required": {STRUCTURED_JSON, LOGICAL_REASONING},
+    "preferred": {HIGH_QUALITY, CAUSAL_REASONING, LARGE_CONTEXT},
+    "min_context_tokens": 16384,  # Need context for causal graph + dialog
+}
+```
+
+### Extraction Response Structure
+
+```python
+class KnowledgeExtractionResponse(BaseModel):
+    items: list[ExtractedKnowledge] = Field(default_factory=list)
+    reasoning: str | None = Field(
+        default="", 
+        description="Brief reasoning about what was extracted and why"
+    )
+    skipped_content: Any | None = Field(
+        default=None, 
+        description="Content that was intentionally not extracted"
+    )
+```
+
+**From `workflows/knowledge_extraction.py:61-79`**
+
+### JSON Extraction Robustness
+
+From `workflows/knowledge_extraction.py:87-156`:
+
+```python
+def extract_json_from_response(text: str) -> dict[str, Any] | None:
+    """
+    Extract JSON from LLM response, handling edge cases:
+    - Clean JSON responses
+    - JSON wrapped in markdown code blocks
+    - Reasoning model output with thinking before JSON
+    - Multiple JSON objects (takes last one)
+    """
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Try removing markdown code blocks
+    if "```json" in text:
+        match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+    
+    # Try to find JSON object in text (for reasoning models)
+    # Walk character-by-character tracking bracket depth
+    ...
+```
+
+Handles reasoning models (DeepSeek R1, QwQ) that emit thinking before JSON.
+
+### Cleanup Script
+
+For simulations with old garbage exposure events:
+
+```bash
+python scripts/cleanup_old_exposure_events.py --dry-run  # Preview
+python scripts/cleanup_old_exposure_events.py --backup   # Delete with backup
+```
+
+## Performance Characteristics
+
+### Validation Complexity
+
+**O(n)** for n validators using:
+- Set operations (information conservation)
+- Vector norms (behavioral inertia)
+- Threshold checks (energy budget, biological constraints)
+
+### Exposure Event Storage
+
+SQLite with indexes on:
+- `entity_id` (queries by entity)
+- `timepoint_id` (queries by timepoint)
+- `run_id` (convergence analysis)
+
+Typical performance:
+- 1000 exposure events: under 10ms query time
+- 10,000 exposure events: under 50ms query time
+
+### Knowledge Extraction Cost
+
+M19 agent cost per dialog:
+- Input: ~1,500 tokens (dialog turns + causal context)
+- Output: ~500 tokens (structured knowledge items)
+- Models: Qwen 2.5 72B, Llama 70B, DeepSeek Chat
+- Cost: ~$0.005 per dialog
+
+Compared to manual annotation: **100x faster, 1000x cheaper**.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Entity Simulation" icon="users" href="/mechanisms/entity-simulation">
+    Dialog synthesis, prospection, animism
+  </Card>
+  <Card title="Infrastructure" icon="server" href="/mechanisms/infrastructure">
+    M18 model selection and routing
+  </Card>
+</CardGroup>

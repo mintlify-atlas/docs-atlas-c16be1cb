@@ -1,0 +1,591 @@
+---
+title: 'Installation'
+description: 'Complete setup guide for Timepoint Pro - pip, poetry, environment configuration, and API keys'
+---
+
+## System Requirements
+
+<Card>
+  **Minimum Requirements:**
+  - Python 3.10, 3.11, 3.12, or 3.13
+  - 4GB RAM (8GB recommended for comprehensive simulations)
+  - 500MB disk space for code + dependencies
+  - Internet connection for API calls
+</Card>
+
+<Info>
+Timepoint Pro is a **standalone simulation engine**. It has no runtime dependencies on other Timepoint Suite services. All LLM calls go directly to OpenRouter. All data stays in local SQLite + flat files.
+</Info>
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="pip (Recommended)">
+    ### Using pip
+
+    The fastest way to get started:
+
+    <Steps>
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/timepoint-ai/timepoint-pro.git
+        cd timepoint-pro
+        ```
+      </Step>
+
+      <Step title="Create a virtual environment (recommended)">
+        ```bash
+        python3.10 -m venv venv
+        source venv/bin/activate  # On Windows: venv\Scripts\activate
+        ```
+      </Step>
+
+      <Step title="Install dependencies">
+        ```bash
+        pip install -r requirements.txt
+        ```
+
+        This installs:
+        - **Core:** Pydantic, Hydra, OmegaConf
+        - **LLM & AI:** Instructor, httpx (for OpenRouter), LangGraph
+        - **Graph:** NetworkX
+        - **Database:** SQLModel
+        - **Scientific:** NumPy 1.x, SciPy, scikit-learn
+        - **Serialization:** msgspec
+        - **Web:** FastAPI, uvicorn
+        - **Dev:** pytest, ruff, black, mypy
+      </Step>
+
+      <Step title="Verify installation">
+        ```bash
+        python -c "import pydantic; import instructor; print('✓ Installation successful')"
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Poetry">
+    ### Using Poetry
+
+    For dependency management and reproducible environments:
+
+    <Steps>
+      <Step title="Install Poetry">
+        ```bash
+        curl -sSL https://install.python-poetry.org | python3 -
+        ```
+
+        Or via pip:
+        ```bash
+        pip install poetry
+        ```
+      </Step>
+
+      <Step title="Clone the repository">
+        ```bash
+        git clone https://github.com/timepoint-ai/timepoint-pro.git
+        cd timepoint-pro
+        ```
+      </Step>
+
+      <Step title="Install with Poetry">
+        ```bash
+        poetry install
+        ```
+
+        This creates a virtual environment and installs all dependencies from `pyproject.toml`.
+      </Step>
+
+      <Step title="Activate the environment">
+        ```bash
+        poetry shell
+        ```
+      </Step>
+
+      <Step title="Verify installation">
+        ```bash
+        poetry run python -c "import pydantic; import instructor; print('✓ Installation successful')"
+        ```
+      </Step>
+    </Steps>
+
+    <Info>
+    Poetry locks dependencies to exact versions via `poetry.lock`, ensuring reproducible builds across environments.
+    </Info>
+  </Tab>
+
+  <Tab title="Dev Container">
+    ### Using Dev Container (VS Code / Codespaces)
+
+    For an isolated, pre-configured development environment:
+
+    <Steps>
+      <Step title="Open in VS Code">
+        Clone the repository and open in VS Code:
+
+        ```bash
+        git clone https://github.com/timepoint-ai/timepoint-pro.git
+        code timepoint-pro
+        ```
+      </Step>
+
+      <Step title="Reopen in Container">
+        VS Code will detect `.devcontainer/devcontainer.json` and prompt:
+
+        **"Reopen in Container"** - Click this.
+
+        The container handles setup automatically:
+        - Python 3.10+
+        - All dependencies from `requirements.txt`
+        - Environment variables
+        - SQLite databases
+      </Step>
+
+      <Step title="Configure API key in container">
+        Create `.env` file in the container:
+
+        ```bash
+        echo "OPENROUTER_API_KEY=your_key_here" > .env
+        ```
+      </Step>
+    </Steps>
+
+    <Note>
+    **GitHub Codespaces:** The same `.devcontainer` configuration works automatically in Codespaces.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Environment Configuration
+
+### API Keys
+
+Timepoint Pro requires an OpenRouter API key. Optional: Oxen.ai key for dataset uploads.
+
+<Steps>
+  <Step title="Get an OpenRouter API key">
+    1. Visit [openrouter.ai/keys](https://openrouter.ai/keys)
+    2. Sign up (free tier available)
+    3. Create a new API key
+    4. Copy the key (format: `sk-or-v1-...`)
+  </Step>
+
+  <Step title="Create .env file">
+    In the project root, create a `.env` file:
+
+    ```bash .env
+    # Required: OpenRouter API for LLM calls
+    OPENROUTER_API_KEY=sk-or-v1-your_key_here
+
+    # Optional: Oxen.ai for dataset versioning and uploads
+    OXEN_API_KEY=your_oxen_key_here
+
+    # Optional: Timepoint API (for cloud execution)
+    TIMEPOINT_API_KEY=your_timepoint_key_here
+    TIMEPOINT_API_URL=http://localhost:8080
+    ```
+
+    <Warning>
+    **Critical:** Ensure your API key is on a **single line** with no line breaks. Multi-line keys cause "Illegal header value" errors.
+    </Warning>
+  </Step>
+
+  <Step title="Load environment variables">
+    Before running any simulation:
+
+    ```bash
+    # Export all variables from .env
+    export $(cat .env | xargs)
+
+    # Or source the file directly
+    source .env
+
+    # Or set directly (must be ONE line, no breaks)
+    export OPENROUTER_API_KEY="your_key_here"
+    ```
+
+    <Note>
+    You must load environment variables in **every new terminal session** before running simulations.
+    </Note>
+  </Step>
+
+  <Step title="Verify environment">
+    ```bash
+    ./run.sh doctor
+    ```
+
+    This validates:
+    - Python 3.10+ installation
+    - `.env` file exists and API keys are set
+    - Database paths are accessible
+    - Key dependencies installed
+  </Step>
+</Steps>
+
+### Directory Structure
+
+After installation, your project structure looks like:
+
+```bash
+timepoint-pro/
+├── .env                          # Your API keys (NEVER commit)
+├── requirements.txt              # pip dependencies
+├── pyproject.toml                # Poetry config + dependencies
+├── run.sh                        # Main CLI entry point
+├── run_all_mechanism_tests.py    # Python runner
+├── metadata/
+│   ├── runs.db                   # SQLite database for run metadata
+│   └── tensors.db                # Entity tensor storage
+├── output/
+│   └── simulations/              # Generated simulation artifacts
+├── templates/                    # JSON scenario templates (if present)
+├── generation/
+│   └── templates/
+│       └── loader.py             # TemplateLoader class
+├── workflows/                    # Dialog, portal, branching strategies
+└── tests/                        # Pytest test suites
+```
+
+## Verify Installation
+
+<Steps>
+  <Step title="Run environment check">
+    ```bash
+    ./run.sh doctor
+    ```
+
+    Expected output:
+    ```bash
+    [OK] Python 3.10+ detected
+    [OK] .env file found
+    [OK] OPENROUTER_API_KEY set
+    [OK] Database paths accessible
+    [OK] Key dependencies installed
+    ```
+  </Step>
+
+  <Step title="List available templates">
+    ```bash
+    ./run.sh list
+    ```
+
+    You should see 21 templates organized by category:
+    - **Showcase** (13 templates): Production-ready scenarios
+    - **Persona** (5 templates): Domain evaluator testing
+    - **Convergence** (3 templates): Consistency evaluation
+  </Step>
+
+  <Step title="Run a quick test simulation (optional)">
+    ```bash
+    ./run.sh run --free convergence_simple
+    ```
+
+    This runs a lightweight template with free models ($0 cost) to verify the full pipeline.
+  </Step>
+</Steps>
+
+## Model Configuration
+
+### Default Models
+
+Timepoint Pro uses OpenRouter to access multiple model providers:
+
+| Task | Default Model | Context | Cost |
+|------|---------------|---------|------|
+| **Graph generation** | Llama 4 Scout | 128K | $0.40/M tokens |
+| **Dialog synthesis** | Llama 4 Scout | 128K | $0.40/M tokens |
+| **PORTAL judging** | Llama 3.1 405B | 128K | $3.00/M tokens |
+| **Summaries** | Llama 4 Scout | 128K | $0.40/M tokens |
+
+<Note>
+**Updated February 2026:** Costs are ~10x lower than previous estimates due to efficient Llama 4 Scout pricing.
+</Note>
+
+### Free Models
+
+For testing without cost:
+
+```bash
+# Best quality free model (Qwen 235B, Llama 70B, etc.)
+./run.sh run --free board_meeting
+
+# Fastest free model (Gemini Flash, smaller Llama)
+./run.sh run --free-fast board_meeting
+
+# List currently available free models
+python run_all_mechanism_tests.py --list-free-models
+```
+
+<Warning>
+Free models have more restrictive rate limits and availability may rotate.
+</Warning>
+
+### Model Override
+
+Override the default model for all LLM calls:
+
+```bash
+# Use DeepSeek Chat (MIT license, training-safe)
+./run.sh run --model deepseek/deepseek-chat board_meeting
+
+# Use Gemini 3 Flash (1M context, fast inference)
+./run.sh run --gemini-flash board_meeting
+
+# Use Groq for ultra-fast inference (~300 tok/s)
+./run.sh run --groq board_meeting
+```
+
+<Info>
+**Model Licensing for Training Data:**
+
+If you plan to use simulation outputs as training data for fine-tuning, you **must** use models with licenses that permit it:
+
+| License | Models | Training Data Status |
+|---------|--------|---------------------|
+| **MIT** | DeepSeek Chat, DeepSeek R1 | ✓ Fully unrestricted |
+| **Apache 2.0** | Mistral 7B, Mixtral 8x7B/8x22B | ✓ Fully unrestricted |
+| **Llama** | Llama 3.1 8B/70B/405B, Llama 4 Scout | ✗ Restricted - prohibits training non-Llama models |
+| **Qwen** | Qwen 2.5 7B/72B, QwQ 32B | ✓ Permissive for most uses |
+
+Default behavior: The model selector (`M18`) automatically filters to training-safe models (MIT/Apache-2.0) when `for_training_data=True`.
+</Info>
+
+## Database Setup
+
+Timepoint Pro uses SQLite for persistence. No manual database setup required.
+
+### Automatic Initialization
+
+Databases are created automatically on first run:
+
+- `metadata/runs.db` - Stores run metadata, convergence sets, usage tracking
+- `metadata/tensors.db` - Stores entity tensors and embeddings
+- `output/simulations/sim_TIMESTAMP.db` - Per-run simulation database
+
+### Manual Initialization (Optional)
+
+If you need to manually initialize:
+
+```bash
+# Create metadata directories
+mkdir -p metadata output/simulations
+
+# Run database migrations (if applicable)
+python -c "from storage import GraphStore; GraphStore('sqlite:///metadata/runs.db')"
+```
+
+## Optional: Oxen.ai Integration
+
+For dataset versioning and collaborative data management:
+
+<Steps>
+  <Step title="Get an Oxen.ai API key">
+    1. Visit [oxen.ai](https://oxen.ai)
+    2. Create an account
+    3. Generate an API key
+  </Step>
+
+  <Step title="Add to .env">
+    ```bash .env
+    OXEN_API_KEY=your_oxen_key_here
+    ```
+  </Step>
+
+  <Step title="Auto-upload training data">
+    When `OXEN_API_KEY` is set, training data is automatically uploaded to Oxen.ai after simulation runs complete.
+
+    ```bash
+    ./run.sh run board_meeting
+    # Training data auto-uploaded to Oxen.ai with full versioning
+    ```
+  </Step>
+</Steps>
+
+<Info>
+Oxen.ai provides Git-like versioning for datasets. When enabled, all simulation outputs (JSONL, SQLite, TDF) are automatically tracked and versioned.
+</Info>
+
+## Testing Your Installation
+
+### Unit Tests
+
+Run the test suite to verify everything works:
+
+```bash
+# All unit tests (fast, no LLM calls)
+./run.sh test unit
+
+# SynthasAIzer tests (142 ADPRS waveform tests)
+./run.sh test synth
+
+# All mechanism tests (M1-M19)
+./run.sh test mechanisms
+
+# Specific mechanism (e.g., M7 causal chains)
+./run.sh test m7
+
+# With coverage report
+./run.sh test unit --coverage
+```
+
+### Integration Tests
+
+```bash
+# Waveform pipeline integration
+pytest tests/integration/test_adprs_phase2_integration.py \
+  tests/integration/test_waveform_sufficiency.py -v
+```
+
+## Development Setup
+
+### Code Quality Tools
+
+Timepoint Pro uses:
+
+- **ruff** - Fast Python linter (replaces flake8, isort)
+- **black** - Code formatter
+- **mypy** - Type checking
+- **pytest** - Testing framework
+
+<CodeGroup>
+```bash Format Code
+# Format with black
+black . --line-length 100
+
+# Lint with ruff
+ruff check .
+
+# Auto-fix linting issues
+ruff check --fix .
+```
+
+```bash Type Checking
+# Run mypy type checking
+mypy .
+```
+
+```bash Run Tests
+# All tests with verbose output
+pytest -v
+
+# Specific test file
+pytest tests/unit/test_entity.py -v
+
+# Tests matching pattern
+pytest -k "test_dialog" -v
+```
+</CodeGroup>
+
+### Security
+
+Static analysis is integrated:
+
+```bash
+# Run Bandit security scan
+bandit -r . -ll
+
+# Run Semgrep security scan
+semgrep --config=auto .
+```
+
+<Note>
+All HIGH security findings have been resolved as of February 2026. Embedding index uses numpy `.npz` + JSON sidecar (safe serialization). All DB queries are parameterized. No hardcoded secrets.
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Python version mismatch">
+    **Problem:** `requires-python >=3.10,<3.14`
+
+    **Solution:** Use Python 3.10, 3.11, 3.12, or 3.13. Check version:
+
+    ```bash
+    python --version
+    ```
+
+    Install Python 3.10+ via:
+    - **macOS:** `brew install python@3.10`
+    - **Ubuntu:** `sudo apt install python3.10`
+    - **Windows:** Download from [python.org](https://python.org)
+  </Accordion>
+
+  <Accordion title="grpcio build failures on macOS">
+    **Problem:** `grpcio` fails to build from source on macOS M1/M2
+
+    **Solution:** Use pre-built wheels by pinning to version ≥1.68.1:
+
+    ```bash
+    pip install grpcio>=1.68.1
+    ```
+
+    Or install with conda:
+
+    ```bash
+    conda install grpcio
+    ```
+  </Accordion>
+
+  <Accordion title="NumPy version conflicts">
+    **Problem:** `ImportError: numpy.core.multiarray failed to import`
+
+    **Solution:** Requirements pin NumPy to 1.x for matplotlib/numba compatibility:
+
+    ```bash
+    pip install "numpy>=1.26,<2.0"
+    ```
+  </Accordion>
+
+  <Accordion title="Missing dependencies after Poetry install">
+    **Problem:** `ModuleNotFoundError` after `poetry install`
+
+    **Solution:** Install with dev dependencies:
+
+    ```bash
+    poetry install --with dev
+    ```
+
+    Or install specific missing packages:
+
+    ```bash
+    poetry add msgspec
+    ```
+  </Accordion>
+
+  <Accordion title="SQLite database locked">
+    **Problem:** `OperationalError: database is locked`
+
+    **Solution:** Another process is using the database. Kill it:
+
+    ```bash
+    # Find Python processes
+    ps aux | grep python
+
+    # Kill the process
+    kill -9 <PID>
+    ```
+
+    Or use a different database:
+
+    ```bash
+    ./run.sh run board_meeting --db metadata/runs_alt.db
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="First Simulation" icon="play" href="/first-simulation">
+    Run your first template and understand the output
+  </Card>
+  <Card title="Templates" icon="folder-tree" href="/templates">
+    Explore 21 production templates
+  </Card>
+  <Card title="Temporal Modes" icon="clock" href="/temporal-modes">
+    Forward, Portal, Branching, Cyclical, Directorial
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Programmatic simulation submission
+  </Card>
+</CardGroup>

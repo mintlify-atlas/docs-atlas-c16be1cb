@@ -1,0 +1,756 @@
+---
+title: "Knowledge Provenance"
+description: "How exposure events prevent anachronisms and enable causal audit trails"
+---
+
+## The Core Problem
+
+In naive LLM simulations, entities **magically know things they shouldn't**:
+
+<CardGroup cols={2}>
+  <Card title="Temporal Anachronism" icon="circle-xmark" color="#ef4444">
+    Character references future event that hasn't happened yet
+  </Card>
+  <Card title="Information Telepathy" icon="circle-xmark" color="#ef4444">
+    Character knows private conversation they didn't witness
+  </Card>
+  <Card title="Source Amnesia" icon="circle-xmark" color="#ef4444">
+    Character states fact with no traceable origin
+  </Card>
+  <Card title="Omniscient Entities" icon="circle-xmark" color="#ef4444">
+    All characters share narrator's knowledge
+  </Card>
+</CardGroup>
+
+**The fundamental insight**: Entities shouldn't magically know things. Every piece of knowledge should have a **traceable origin**—who learned what, from whom, when, with what confidence.
+
+---
+
+## M3: Exposure Event Tracking
+
+### What is an Exposure Event?
+
+An **exposure event** is a logged record of knowledge acquisition:
+
+```python
+ExposureEvent:
+    entity_id: str                # Who learned
+    event_type: EventType         # How they learned
+    information: str              # What they learned
+    source: Optional[str]         # From whom/what
+    timestamp: datetime           # When
+    confidence: float             # How certain (0.0-1.0)
+    timepoint_id: str             # Where in causal chain
+```
+
+### Event Types
+
+<Tabs>
+  <Tab title="witnessed">
+    Entity directly observed an event
+    
+    **Example**: "Madison witnessed Washington's speech at convention"
+    
+    **Confidence**: High (0.9-1.0)
+  </Tab>
+  <Tab title="learned">
+    Entity acquired information through study/reading
+    
+    **Example**: "Jefferson learned of Shays' Rebellion from newspapers"
+    
+    **Confidence**: Medium-High (0.7-0.9)
+  </Tab>
+  <Tab title="told">
+    Entity was explicitly informed by another entity
+    
+    **Example**: "Franklin told Madison about Pennsylvania's constitution"
+    
+    **Confidence**: Medium (0.6-0.8), depends on source trust
+  </Tab>
+  <Tab title="experienced">
+    Entity lived through an event personally
+    
+    **Example**: "Hamilton experienced combat at Yorktown"
+    
+    **Confidence**: Very High (0.95-1.0)
+  </Tab>
+</Tabs>
+
+### The Validation Constraint
+
+<Warning>
+**Iron Law**: `entity.knowledge_state ⊆ {e.information for e in entity.exposure_events where e.timestamp ≤ query_timestamp}`
+
+An entity **cannot know something** without a recorded exposure event explaining how they learned it.
+</Warning>
+
+---
+
+## Example: Constitutional Convention
+
+### Scenario Timeline
+
+<Steps>
+  <Step title="May 14, 1787: Madison Creates Virginia Plan">
+    ```python
+    ExposureEvent(
+        entity_id="james_madison",
+        event_type="experienced",
+        information="Virginia Plan constitutional framework",
+        source="self",  # Madison is the creator
+        timestamp="1787-05-14",
+        confidence=1.0,
+        timepoint_id="virginia_plan_drafting"
+    )
+    ```
+  </Step>
+  <Step title="May 25: Madison Shares with Washington">
+    ```python
+    # Madison's telling
+    ExposureEvent(
+        entity_id="george_washington",
+        event_type="told",
+        information="Virginia Plan constitutional framework",
+        source="james_madison",
+        timestamp="1787-05-25",
+        confidence=0.85,  # Trust in Madison
+        timepoint_id="washington_madison_meeting"
+    )
+    ```
+  </Step>
+  <Step title="May 29: Washington References Plan ✅">
+    ```python
+    # VALID: Washington has exposure from Step 2
+    dialog_turn = DialogTurn(
+        speaker="george_washington",
+        content="As Madison's proposal outlines, we need strong federal powers",
+        knowledge_references=["Virginia Plan constitutional framework"],
+        timestamp="1787-05-29"
+    )
+    
+    # Validation passes:
+    knowledge_accessible = check_exposure_events(
+        entity="george_washington",
+        knowledge="Virginia Plan constitutional framework",
+        query_time="1787-05-29"
+    )
+    # → Returns exposure from May 25
+    ```
+  </Step>
+  <Step title="May 29: Jefferson References Plan ❌">
+    ```python
+    # INVALID: Jefferson not present, no exposure
+    dialog_turn = DialogTurn(
+        speaker="thomas_jefferson",
+        content="Madison's Virginia Plan is too centralist",
+        knowledge_references=["Virginia Plan constitutional framework"],
+        timestamp="1787-05-29"
+    )
+    
+    # Validation FAILS:
+    knowledge_accessible = check_exposure_events(
+        entity="thomas_jefferson",
+        knowledge="Virginia Plan constitutional framework",
+        query_time="1787-05-29"
+    )
+    # → No exposure events found
+    # → ValidationError: Temporal anachronism detected
+    ```
+    
+    <Note>
+    Jefferson was in Paris as ambassador during the convention. He cannot know about internal deliberations.
+    </Note>
+  </Step>
+</Steps>
+
+---
+
+## Causal Audit Trail
+
+### Exposure Events Form a DAG
+
+<Frame>
+  <img src="/images/exposure-dag.png" alt="Exposure event directed acyclic graph" />
+</Frame>
+
+Nodes are **information items**, edges are **causal relationships** (who learned from whom).
+
+### Walking the Graph
+
+<CodeGroup>
+```python Trace Knowledge Origin
+def trace_knowledge_origin(entity_id: str, knowledge: str, store: GraphStore):
+    """Walk exposure graph backward to find ultimate source."""
+    events = store.get_exposure_events(entity_id, information=knowledge)
+    
+    if not events:
+        return None  # No provenance!
+    
+    # Walk backward through sources
+    path = []
+    current_entity = entity_id
+    
+    while current_entity:
+        event = events[0]  # Most recent
+        path.append({
+            "entity": current_entity,
+            "source": event.source,
+            "type": event.event_type,
+            "confidence": event.confidence,
+            "timestamp": event.timestamp
+        })
+        
+        if event.source == "self" or event.source is None:
+            break  # Reached origin
+        
+        current_entity = event.source
+        events = store.get_exposure_events(current_entity, information=knowledge)
+    
+    return path
+```
+
+```python Example Output
+path = trace_knowledge_origin(
+    entity_id="george_washington",
+    knowledge="Virginia Plan constitutional framework",
+    store=store
+)
+
+print(path)
+# [
+#   {
+#     "entity": "george_washington",
+#     "source": "james_madison",
+#     "type": "told",
+#     "confidence": 0.85,
+#     "timestamp": "1787-05-25"
+#   },
+#   {
+#     "entity": "james_madison",
+#     "source": "self",
+#     "type": "experienced",
+#     "confidence": 1.0,
+#     "timestamp": "1787-05-14"
+#   }
+# ]
+```
+</CodeGroup>
+
+### Counterfactual Reasoning
+
+Exposure graphs enable **"what if"** queries:
+
+<Accordion title="Example: What if Madison had not shared with Washington?">
+  ```python
+  # Remove the exposure event
+  store.delete_exposure_event(
+      entity_id="george_washington",
+      information="Virginia Plan constitutional framework",
+      timestamp="1787-05-25"
+  )
+  
+  # Re-run simulation from May 26 forward
+  branch = create_counterfactual_branch(
+      parent_timeline=baseline,
+      intervention_point="may_25_meeting",
+      intervention=Intervention(
+          type="knowledge_removal",
+          target="george_washington",
+          parameters={"knowledge": "Virginia Plan constitutional framework"}
+      )
+  )
+  
+  # Washington's May 29 dialog now CANNOT reference Virginia Plan
+  # System generates alternative dialog without that knowledge
+  ```
+  
+  This enables causal impact analysis: **How much did this specific knowledge transfer matter?**
+</Accordion>
+
+---
+
+## M19: Knowledge Extraction Agent
+
+### The Problem with Naive Extraction
+
+Early approaches used capitalization heuristics:
+
+```python
+# BROKEN: Naive extraction
+def extract_knowledge_references(content: str) -> List[str]:
+    words = content.split()
+    knowledge_items = []
+    for word in words:
+        clean = word.strip('.,!?;:"\'-()[]{}')  
+        if clean and len(clean) > 3 and clean[0].isupper():
+            knowledge_items.append(clean.lower())
+    return list(set(knowledge_items))
+
+# Result from dialog:
+# ["we'll", "thanks", "what", "michael", "i've"]  # GARBAGE
+```
+
+<Warning>
+This catches sentence-initial words, contractions, common words, names without context—all useless.
+</Warning>
+
+### The M19 Solution: LLM-Based Extraction
+
+An **LLM agent** receives:
+1. Dialog turns to analyze
+2. Causal graph context (existing knowledge)
+3. Entity metadata (who's speaking, who's listening)
+
+It returns structured `KnowledgeItem` objects:
+
+```python
+KnowledgeItem:
+    content: str                # Complete semantic unit
+    speaker: str                # Entity who communicated
+    listeners: List[str]        # Entities who received it
+    category: str               # fact, decision, opinion, plan, revelation, question, agreement
+    confidence: float           # 0.0-1.0, extraction confidence
+    context: Optional[str]      # Why this matters
+    causal_relevance: float     # 0.0-1.0, importance for causal chain
+```
+
+### What Gets Extracted
+
+<Tabs>
+  <Tab title="✅ Good Extractions">
+    - **Facts**: "The meeting is scheduled for 3pm Tuesday"
+    - **Decisions**: "The board approved the $2M budget increase"
+    - **Revelations**: "Sarah revealed the prototype failed last week"
+    - **Plans**: "We'll launch the product in Q3 2025"
+    - **Agreements**: "Everyone agreed to postpone until we have more data"
+  </Tab>
+  <Tab title="❌ Correctly Ignored">
+    - Greetings: "Hello", "Thanks", "Good morning"
+    - Contractions: "We'll", "I've", "That's"
+    - Single names without context: "Michael", "Sarah"
+    - Filler words: "What", "Well", "Actually"
+    - Noise: "Um", "Uh", "Like"
+  </Tab>
+</Tabs>
+
+### Knowledge Categories
+
+| Category | Description | Example | Causal Relevance |
+|----------|-------------|---------|------------------|
+| **fact** | Verifiable information | "The competitor filed patent #8,123,456" | High (0.8-1.0) |
+| **decision** | Communicated choice | "We decided to pivot to B2B" | Very High (0.9-1.0) |
+| **opinion** | Subjective view | "I think the design needs work" | Medium (0.4-0.6) |
+| **plan** | Intended future action | "We'll hire 3 engineers in Q2" | High (0.7-0.9) |
+| **revelation** | New info changing understanding | "The acquisition talks fell through" | Very High (0.9-1.0) |
+| **question** | Query revealing information | "Did you know about the layoffs?" | Low-Medium (0.3-0.5) |
+| **agreement** | Consensus reached | "We all agree on the pricing strategy" | High (0.7-0.9) |
+
+### RAG-Aware Prompting
+
+The extraction agent receives **causal context** from existing exposure events:
+
+```python
+def build_causal_context(entities, store):
+    """Build context from existing knowledge for extraction agent."""
+    context = []
+    for entity in entities:
+        # Get recent exposure events
+        exposures = store.get_exposure_events(entity.entity_id, limit=10)
+        
+        # Include static knowledge
+        static = entity.entity_metadata.get("knowledge_state", [])
+        
+        context.append({
+            "entity": entity.entity_id,
+            "known_facts": [e.information for e in exposures],
+            "static_knowledge": static
+        })
+    
+    return context
+```
+
+This enables the agent to:
+1. **Avoid redundant extraction**: Don't store facts already in system
+2. **Recognize novel information**: New facts worth storing
+3. **Understand relationships**: How new knowledge connects to existing
+
+---
+
+## M4: Constraint Enforcement
+
+### Five Conservation Laws
+
+Timepoint Pro enforces consistency using **conservation-law metaphors**:
+
+<AccordionGroup>
+  <Accordion title="1. Information Conservation (Shannon Entropy)">
+    **Law**: Knowledge state cannot exceed exposure history
+    
+    ```python
+    def validate_information(entity, context):
+        knowledge = set(entity.knowledge_state)
+        exposure = set(e.information for e in context["exposure_history"])
+        violations = knowledge - exposure
+        return ValidationResult(
+            valid=len(violations) == 0,
+            violations=list(violations)
+        )
+    ```
+    
+    **Analogy**: Information is conserved like energy—can't create it from nothing
+  </Accordion>
+  <Accordion title="2. Energy Budget (Thermodynamics)">
+    **Law**: Entities have bounded cognitive/physical energy per timepoint
+    
+    ```python
+    def validate_energy(entity, actions):
+        total_cost = sum(action.energy_cost for action in actions)
+        available = entity.cognitive_tensor.energy_budget
+        
+        return ValidationResult(
+            valid=total_cost <= available,
+            violations=[f"Energy deficit: {total_cost - available:.1f}"]
+        )
+    ```
+    
+    **Analogy**: Can't spend more energy than you have
+  </Accordion>
+  <Accordion title="3. Behavioral Inertia">
+    **Law**: Personality traits persist; sudden changes require justification
+    
+    ```python
+    def validate_behavior(entity, new_behavior, timespan):
+        old_traits = entity.behavior_vector
+        new_traits = new_behavior.behavior_vector
+        
+        delta = np.linalg.norm(new_traits - old_traits)
+        max_change = 0.1 * timespan.days  # 10% per day max
+        
+        return ValidationResult(
+            valid=delta <= max_change,
+            violations=[f"Behavior shift too rapid: {delta:.2f} > {max_change:.2f}"]
+        )
+    ```
+    
+    **Analogy**: Momentum—entities have inertia, can't change direction instantly
+  </Accordion>
+  <Accordion title="4. Biological Constraints">
+    **Law**: Physical limitations constrain behavior
+    
+    ```python
+    def validate_biological(entity, action):
+        violations = []
+        
+        if action.requires_mobility and entity.physical_tensor.mobility < 0.3:
+            violations.append("Action requires mobility entity lacks")
+        
+        if action.location_required and entity.physical_tensor.location != action.location:
+            violations.append("Entity not at required location")
+        
+        return ValidationResult(
+            valid=len(violations) == 0,
+            violations=violations
+        )
+    ```
+    
+    **Analogy**: Physical constraints are hard limits
+  </Accordion>
+  <Accordion title="5. Network Flow">
+    **Law**: Information propagates along relationship edges
+    
+    ```python
+    def validate_network_flow(knowledge_item, source, target, graph):
+        # Check if path exists in relationship graph
+        path = nx.shortest_path(graph, source, target)
+        
+        if not path:
+            return ValidationResult(
+                valid=False,
+                violations=[f"No information path from {source} to {target}"]
+            )
+        
+        # Check trust levels along path
+        min_trust = min(graph[u][v]["trust_level"] for u, v in zip(path[:-1], path[1:]))
+        
+        return ValidationResult(
+            valid=min_trust > 0.3,  # Threshold for information flow
+            violations=[f"Trust too low along path: {min_trust:.2f}"]
+        )
+    ```
+    
+    **Analogy**: Information flows like water through pipes (relationship network)
+  </Accordion>
+</AccordionGroup>
+
+### Castaway Colony Example
+
+<Tabs>
+  <Tab title="Valid: Engineer Repairs Beacon">
+    ```python
+    # Check all constraints
+    validate_information(sharma, context)
+    # ✅ Sharma has exposure: "power coupling location" from Day 3 debris survey
+    
+    validate_energy(sharma, [repair_action])
+    # ✅ repair_action costs 40 energy, Sharma has 65 available
+    
+    validate_biological(sharma, repair_action)
+    # ✅ Sharma's mobility is 0.8 (healthy), location matches debris field
+    
+    # Action proceeds
+    ```
+  </Tab>
+  <Tab title="Invalid: Commander Spacewalk During Storm">
+    ```python
+    validate_biological(tanaka, spacewalk_action)
+    # ❌ Radiation storm in progress
+    # ❌ Environmental constraint: exterior_radiation_level > 8.0 Sv/hr
+    
+    ValidationResult(
+        valid=False,
+        violations=["Lethal radiation exposure, survival time <15 minutes"]
+    )
+    
+    # Action blocked
+    ```
+  </Tab>
+  <Tab title="Invalid: Information Telepathy">
+    ```python
+    # Doctor wants to use cave shelter discovered by separate exploration team
+    validate_information(okonkwo, {"knowledge": "cave_shelter_location"})
+    # ❌ No exposure event
+    
+    validate_network_flow("cave_shelter_location", source="scout_team", target="okonkwo", graph)
+    # ❌ Scout team has not returned to base yet (Day 9)
+    # ❌ No communication link established
+    
+    ValidationResult(
+        valid=False,
+        violations=["Knowledge not accessible: no exposure or communication path"]
+    )
+    
+    # Doctor cannot reference cave shelter until scouts return
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+**Important**: Specific numerical values (O₂ rates, radiation levels, etc.) in simulation output are **LLM-generated narrative**, not computed by the engine. The engine enforces **structural constraints** (information conservation, energy budgets, behavioral inertia), not physics calculations.
+</Note>
+
+---
+
+## PORTAL Mode: Causal Time Filtering
+
+### The Challenge
+
+In **PORTAL mode** (backward reasoning), characters exist at multiple timepoints but with different causal positions. A character in 2028 cannot know about events from 2030 in their past.
+
+### Knowledge Stripping
+
+<CodeGroup>
+```python Filter by Causal Time
+def filter_knowledge_by_causal_time(entity, timepoint, store):
+    """Remove knowledge from causally inaccessible timepoints."""
+    # Walk causal_parent chain to build ancestor set
+    ancestors = set()
+    current = timepoint
+    
+    while current:
+        ancestors.add(current.timepoint_id)
+        parent_id = current.causal_parent
+        current = store.get_timepoint(parent_id) if parent_id else None
+    
+    # Filter exposure events to only ancestors
+    accessible_events = [
+        e for e in store.get_exposure_events(entity.entity_id)
+        if e.timepoint_id in ancestors
+    ]
+    
+    return accessible_events
+```
+
+```python Strip Future Emotions
+def strip_backwards_emotions(knowledge_items, current_time):
+    """Remove emotional references to future events."""
+    future_indicators = [
+        "will happen", "going to occur", "fear that", 
+        "anxious about", "hoping for", "dreading"
+    ]
+    
+    filtered = []
+    for item in knowledge_items:
+        # Check if item references future
+        has_future_ref = any(ind in item.content.lower() for ind in future_indicators)
+        
+        if not has_future_ref:
+            filtered.append(item)
+    
+    return filtered
+```
+</CodeGroup>
+
+<Accordion title="Example: Portal Mode Character in 2028">
+  **Scenario**: Presidential campaign portal, endpoint 2040, character at 2028 step
+  
+  **Full Knowledge Graph**:
+  - "Campaign strategy meeting July 2027" ✅ Accessible
+  - "Primary victory March 2028" ✅ Accessible
+  - "Running mate selection June 2029" ❌ Not yet happened
+  - "General election debate Oct 2029" ❌ Not yet happened
+  - "Inauguration January 2040" ❌ Endpoint, not accessible
+  
+  **Filtered Knowledge** (what character actually knows in 2028):
+  - Campaign strategy
+  - Primary victory
+  
+  **Dialog Generation**: Uses only filtered knowledge, character cannot reference or fear events from 2029+
+</Accordion>
+
+---
+
+## Integration with Dialog Synthesis (M11)
+
+Knowledge extraction happens automatically during dialog:
+
+```python
+# In synthesize_dialog():
+
+# 1. Generate dialog (M11)
+dialog_data = llm.generate_dialog(prompt, max_tokens=2000)
+
+# 2. Extract knowledge using M19 agent
+extraction_result = extract_knowledge_from_dialog(
+    dialog_turns=dialog_data.turns,
+    entities=entities,
+    timepoint=timepoint,
+    llm=llm,
+    store=store
+)
+
+# 3. Create exposure events (M19→M3)
+exposure_events = create_exposure_events_from_knowledge(
+    extraction_result=extraction_result,
+    timepoint=timepoint,
+    store=store
+)
+
+# 4. Validate all new knowledge references
+for turn in dialog_data.turns:
+    for knowledge_ref in turn.knowledge_references:
+        validate_information(turn.speaker, {"knowledge": knowledge_ref})
+        # Raises ValidationError if no exposure event
+```
+
+---
+
+## Preventing Anachronisms: The Complete Pipeline
+
+<Steps>
+  <Step title="Dialog Generation with Context">
+    M11 generates dialog using entity's **filtered knowledge state** (only causally accessible items)
+  </Step>
+  <Step title="Knowledge Extraction">
+    M19 extracts semantic knowledge items from dialog turns
+  </Step>
+  <Step title="Exposure Event Creation">
+    M3 creates exposure events for all listeners:
+    - `event_type="told"`
+    - `source=speaker`
+    - `confidence` based on speaker's credibility
+  </Step>
+  <Step title="Constraint Validation">
+    M4 validates all knowledge references:
+    - Information conservation
+    - Network flow
+    - Temporal ordering (PORTAL mode)
+  </Step>
+  <Step title="Causal Graph Update">
+    Exposure events added to DAG, enabling future tracing
+  </Step>
+</Steps>
+
+<Frame>
+  <img src="/images/provenance-pipeline.png" alt="Knowledge provenance pipeline" />
+</Frame>
+
+---
+
+## API Examples
+
+<CodeGroup>
+```python Query Exposure History
+from generation import GraphStore
+
+store = GraphStore("simulation.db")
+
+# Get all exposure events for entity
+events = store.get_exposure_events("george_washington")
+
+for event in events:
+    print(f"{event.timestamp}: {event.event_type}")
+    print(f"  Learned: {event.information}")
+    print(f"  From: {event.source}")
+    print(f"  Confidence: {event.confidence:.2f}")
+```
+
+```python Trace Knowledge Origin
+path = trace_knowledge_origin(
+    entity_id="cfo",
+    knowledge="Q3 revenue shortfall",
+    store=store
+)
+
+# Output:
+# [
+#   {"entity": "cfo", "source": "accounting_system", "type": "learned"},
+#   {"entity": "accounting_system", "source": "self", "type": "experienced"}
+# ]
+```
+
+```python Create Manual Exposure Event
+from schemas import ExposureEvent
+from datetime import datetime
+
+event = ExposureEvent(
+    entity_id="thomas_jefferson",
+    event_type="learned",
+    information="Constitution ratified in Paris newspapers",
+    source="gazette_de_france",
+    timestamp=datetime(1788, 8, 15),
+    confidence=0.75,
+    timepoint_id="paris_embassy_august_1788"
+)
+
+store.add_exposure_event(event)
+```
+
+```python Validate Knowledge Access
+from workflows.validation import validate_information
+
+result = validate_information(
+    entity=store.get_entity("james_madison"),
+    context={"exposure_history": store.get_exposure_events("james_madison")},
+    knowledge_item="Virginia Plan details"
+)
+
+if not result.valid:
+    print(f"Violations: {result.violations}")
+```
+</CodeGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Temporal Modes" icon="clock" href="/concepts/temporal-modes">
+    How PORTAL mode uses causal filtering
+  </Card>
+  <Card title="Fidelity Management" icon="layer-group" href="/concepts/fidelity-management">
+    Resolution levels and TTM tensors
+  </Card>
+  <Card title="All 19 Mechanisms" icon="gears" href="/concepts/mechanisms">
+    Complete technical architecture
+  </Card>
+</CardGroup>

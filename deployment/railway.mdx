@@ -1,0 +1,539 @@
+---
+title: 'Railway Deployment'
+description: 'Deploy Timepoint Pro to Railway with Postgres, Redis, and internal networking'
+---
+
+## Overview
+
+Railway provides a managed platform for deploying Timepoint Pro with internal service networking. This guide covers deploying both the standalone open-source engine and the Pro-Cloud wrapper.
+
+## Railway Configuration
+
+The open-source repo includes a minimal `railway.toml` for basic deployments:
+
+```toml
+[build]
+
+[deploy]
+startCommand = "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080}"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+```
+
+## Service Architecture
+
+For Pro-Cloud deployments, Railway manages these services:
+
+```
+┌─────────────────┐
+│   Web App       │
+│  (Next.js)      │
+└────────┬────────┘
+         │
+         ↓
+┌─────────────────┐     ┌─────────────────┐
+│  Pro-Cloud API  │────→│    Postgres     │
+│   (FastAPI)     │     │   (persistent)  │
+└────────┬────────┘     └─────────────────┘
+         │
+         ↓
+┌─────────────────┐     ┌─────────────────┐
+│ Celery Worker   │────→│      Redis      │
+│  (background)   │     │ (broker/cache)  │
+└─────────────────┘     └─────────────────┘
+```
+
+## Standalone Engine Deployment
+
+Deploy the open-source engine directly:
+
+### 1. Create Railway Project
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login
+railway login
+
+# Create project
+railway init
+```
+
+### 2. Add Postgres Service
+
+```bash
+# Add Postgres from Railway dashboard or CLI
+railway add --database postgres
+```
+
+Railway automatically sets `DATABASE_URL`.
+
+### 3. Configure Environment Variables
+
+In Railway dashboard, add:
+
+```bash
+# Required
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Optional
+GROQ_API_KEY=gsk_...
+LLM_SERVICE_ENABLED=true
+LLM_MODEL=meta-llama/llama-3.1-70b-instruct
+
+# Auto-set by Railway
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+PORT=${{PORT}}
+```
+
+### 4. Deploy
+
+```bash
+# Deploy from local
+railway up
+
+# Or connect GitHub repo and enable auto-deploy
+railway link
+```
+
+### 5. Verify Deployment
+
+```bash
+# Check logs
+railway logs
+
+# Open app
+railway open
+
+# Test health endpoint
+curl https://your-app.railway.app/health
+```
+
+## Pro-Cloud Deployment
+
+Full production deployment with Celery, Redis, and JWT auth.
+
+### Service Definitions
+
+#### 1. Postgres Service
+
+```bash
+# Railway managed Postgres
+railway add --database postgres
+```
+
+Provides:
+- `${{Postgres.DATABASE_URL}}` - Connection string
+- Automatic backups
+- Managed scaling
+
+#### 2. Redis Service
+
+```bash
+# Railway managed Redis
+railway add --database redis
+```
+
+Provides:
+- `${{Redis.REDIS_URL}}` - Connection string
+- Used for Celery broker and result backend
+
+#### 3. API Service (FastAPI)
+
+`railway.toml`:
+
+```toml
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 4"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[env]
+PYTHON_VERSION = "3.10"
+```
+
+Environment variables:
+
+```bash
+# Core
+OPENROUTER_API_KEY=${{SECRET_OPENROUTER_KEY}}
+GROQ_API_KEY=${{SECRET_GROQ_KEY}}
+
+# Database
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+
+# Redis
+REDIS_URL=${{Redis.REDIS_URL}}
+CELERY_BROKER_URL=${{Redis.REDIS_URL}}/0
+CELERY_RESULT_BACKEND=${{Redis.REDIS_URL}}/1
+
+# JWT Auth
+JWT_SECRET_KEY=${{SECRET_JWT_KEY}}
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# API Keys
+API_KEY_SALT=${{SECRET_API_KEY_SALT}}
+
+# Budget
+DEFAULT_USER_BUDGET_USD=10.00
+BUDGET_CHECK_ENABLED=true
+
+# Optional: Billing forwarding
+BILLING_SERVICE_URL=${{BILLING_SERVICE_URL}}
+BILLING_SERVICE_TOKEN=${{SECRET_BILLING_TOKEN}}
+
+# Railway
+RAILWAY_ENVIRONMENT=${{RAILWAY_ENVIRONMENT}}
+RAILWAY_SERVICE_NAME=timepoint-pro-cloud
+PORT=${{PORT}}
+```
+
+#### 4. Celery Worker Service
+
+`Procfile`:
+
+```
+worker: celery -A tasks worker --loglevel=info --concurrency=4
+```
+
+Or in `railway.toml`:
+
+```toml
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "celery -A tasks worker --loglevel=info --concurrency=4"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[healthcheck]
+path = "/"
+interval = 30
+timeout = 10
+```
+
+Environment variables (same as API service):
+
+```bash
+OPENROUTER_API_KEY=${{SECRET_OPENROUTER_KEY}}
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+CELERY_BROKER_URL=${{Redis.REDIS_URL}}/0
+CELERY_RESULT_BACKEND=${{Redis.REDIS_URL}}/1
+```
+
+## Internal Networking
+
+Railway services communicate via internal DNS:
+
+```python
+# API service calling Billing service
+import os
+import httpx
+
+billing_url = os.getenv('BILLING_SERVICE_URL')
+if billing_url:
+    # Use Railway internal URL: ${{BILLING_SERVICE.RAILWAY_PRIVATE_DOMAIN}}
+    response = httpx.post(
+        f'{billing_url}/api/usage',
+        json=usage_data,
+        headers={'Authorization': f'Bearer {billing_token}'}
+    )
+```
+
+Environment variables for internal networking:
+
+```bash
+# Set in Railway dashboard
+BILLING_SERVICE_URL=https://${{BILLING_SERVICE.RAILWAY_PRIVATE_DOMAIN}}
+AUTH_SERVICE_URL=https://${{AUTH_SERVICE.RAILWAY_PRIVATE_DOMAIN}}
+WEB_APP_URL=https://${{WEB_SERVICE.RAILWAY_PUBLIC_DOMAIN}}
+```
+
+## Database Migrations
+
+### Initial Schema
+
+```bash
+# In Railway shell or via migration script
+railway run python -c "
+import os
+from sqlmodel import SQLModel, create_engine
+from schemas import *  # Import all models
+
+engine = create_engine(os.getenv('DATABASE_URL'))
+SQLModel.metadata.create_all(engine)
+print('Database schema created')
+"
+```
+
+### Using Alembic
+
+```bash
+# Install Alembic
+pip install alembic
+
+# Initialize
+alembic init alembic
+
+# Configure alembic.ini
+sqlalchemy.url = ${DATABASE_URL}
+
+# Create migration
+alembic revision --autogenerate -m "Initial schema"
+
+# Apply migrations
+alembic upgrade head
+```
+
+Add to `railway.toml`:
+
+```toml
+[build]
+buildCommand = "pip install -r requirements.txt && alembic upgrade head"
+```
+
+## Scaling
+
+### API Service Scaling
+
+```toml
+[deploy]
+startCommand = "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 4"
+```
+
+Or use Railway dashboard to scale replicas:
+
+```bash
+# Via CLI
+railway scale --replicas 3 api-service
+```
+
+### Celery Worker Scaling
+
+```toml
+[deploy]
+startCommand = "celery -A tasks worker --loglevel=info --concurrency=8"
+```
+
+Or scale replicas:
+
+```bash
+railway scale --replicas 4 worker-service
+```
+
+## Monitoring
+
+### Railway Logs
+
+```bash
+# API logs
+railway logs --service api-service
+
+# Worker logs
+railway logs --service worker-service
+
+# Follow logs
+railway logs --service api-service --follow
+```
+
+### Metrics
+
+Railway dashboard shows:
+- CPU usage
+- Memory usage
+- Network traffic
+- Request count
+- Error rate
+
+### Health Checks
+
+API health endpoint:
+
+```python
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get('/health')
+async def health_check():
+    return {
+        'status': 'healthy',
+        'service': 'timepoint-pro-cloud',
+        'version': os.getenv('RAILWAY_GIT_COMMIT_SHA', 'unknown')[:7]
+    }
+```
+
+## Postgres Configuration
+
+### Connection Pooling
+
+```python
+from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
+
+engine = create_engine(
+    os.getenv('DATABASE_URL'),
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,   # Recycle connections after 1 hour
+)
+```
+
+### Read Replicas (Railway Pro)
+
+For high-traffic deployments:
+
+```python
+# Primary for writes
+write_engine = create_engine(os.getenv('DATABASE_URL'))
+
+# Replica for reads
+read_engine = create_engine(os.getenv('DATABASE_REPLICA_URL'))
+
+# Route queries
+def get_engine(readonly=False):
+    return read_engine if readonly else write_engine
+```
+
+## Environment Variable Management
+
+### Secrets Management
+
+Store secrets in Railway's environment variables:
+
+```bash
+# Set via CLI
+railway variables set OPENROUTER_API_KEY=sk-or-v1-...
+railway variables set JWT_SECRET_KEY=$(openssl rand -hex 32)
+railway variables set API_KEY_SALT=$(openssl rand -hex 16)
+
+# Or use Railway dashboard for bulk import
+```
+
+### Environment Inheritance
+
+```bash
+# Shared variables across services
+railway variables set --shared OPENROUTER_API_KEY=sk-or-v1-...
+
+# Service-specific overrides
+railway variables set --service worker-service CELERY_WORKER_CONCURRENCY=8
+```
+
+## Deployment Workflow
+
+### GitHub Integration
+
+1. Connect GitHub repo in Railway dashboard
+2. Enable auto-deploy on push to `main`
+3. Preview deployments for PRs (optional)
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+      
+      - name: Deploy
+        run: railway up --service api-service
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+```
+
+## Cost Optimization
+
+### Railway Pricing
+
+- **Starter**: $5/month per service
+- **Pro**: Usage-based pricing
+- Postgres/Redis: Separate charges
+
+### Optimization Tips
+
+1. **Use sleep mode**: Railway can sleep inactive services
+2. **Right-size resources**: Monitor and adjust CPU/memory
+3. **Connection pooling**: Reduce database connections
+4. **Redis caching**: Cache expensive queries
+5. **Batch jobs**: Use Celery for background processing
+
+## Troubleshooting
+
+### Common Issues
+
+**"Database connection failed"**
+```bash
+# Check DATABASE_URL is set
+railway variables
+
+# Test connection
+railway run python -c "import os; from sqlalchemy import create_engine; create_engine(os.getenv('DATABASE_URL')).connect()"
+```
+
+**"Celery worker not processing jobs"**
+```bash
+# Check Redis connection
+railway run python -c "import redis; redis.from_url(os.getenv('REDIS_URL')).ping()"
+
+# Inspect worker
+railway run celery -A tasks inspect active
+```
+
+**"502 Bad Gateway"**
+- Check health endpoint is responding
+- Verify `PORT` environment variable is used
+- Check Railway logs for startup errors
+
+## Security
+
+### Network Security
+
+- Railway services are isolated by default
+- Internal networking uses private DNS
+- Public endpoints require explicit configuration
+
+### Secrets Rotation
+
+```bash
+# Rotate JWT secret
+railway variables set JWT_SECRET_KEY=$(openssl rand -hex 32)
+
+# Restart services to pick up new secret
+railway restart --service api-service
+railway restart --service worker-service
+```
+
+### Database Security
+
+- Railway manages SSL certificates
+- Use connection string with `sslmode=require`
+- Enable Postgres connection logging (Railway Pro)
+
+## Next Steps
+
+- [Pro-Cloud Architecture](/deployment/pro-cloud) - Understand the wrapper layer
+- [Docker Setup](/deployment/docker) - Container configuration
+- [Local Development](/deployment/local) - Run locally before deploying

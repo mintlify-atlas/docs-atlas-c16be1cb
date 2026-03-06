@@ -1,0 +1,360 @@
+---
+title: 'Search API'
+description: 'Semantic search and tensor composition'
+---
+
+## Overview
+
+The Search API provides semantic search capabilities over tensor descriptions using RAG (Retrieval-Augmented Generation) and tensor composition methods for combining multiple tensors.
+
+## Prerequisites
+
+Semantic search requires RAG to be enabled in the API configuration:
+
+```bash
+RAG_ENABLED=true uvicorn api.main:app
+```
+
+If RAG is not configured, search endpoints return `503 Service Unavailable`.
+
+## Semantic Search
+
+Search tensors using natural language queries. Results are filtered to tensors you have access to.
+
+```bash POST /search
+curl -X POST http://localhost:8080/search \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "detective with analytical thinking skills",
+    "n_results": 10,
+    "min_maturity": 0.8,
+    "categories": ["profession/detective"],
+    "include_values": true
+  }'
+```
+
+### Request Body
+
+<ParamField body="query" type="string" required>
+  Natural language search query (1-1000 characters)
+</ParamField>
+
+<ParamField body="n_results" type="integer" default="10">
+  Maximum number of results (1-100)
+</ParamField>
+
+<ParamField body="min_maturity" type="number" default="0.0">
+  Minimum maturity threshold (0.0-1.0)
+</ParamField>
+
+<ParamField body="categories" type="array">
+  Filter by categories (e.g., ["profession/detective"])
+</ParamField>
+
+<ParamField body="include_values" type="boolean" default="false">
+  Include full tensor values in response
+</ParamField>
+
+### Response
+
+<ResponseField name="results" type="array">
+  Array of search result items
+  <ResponseField name="results[].tensor_id" type="string">
+    Tensor identifier
+  </ResponseField>
+  <ResponseField name="results[].score" type="number">
+    Similarity score (0-1, higher is better)
+  </ResponseField>
+  <ResponseField name="results[].entity_id" type="string">
+    Entity identifier
+  </ResponseField>
+  <ResponseField name="results[].description" type="string">
+    Tensor description
+  </ResponseField>
+  <ResponseField name="results[].category" type="string">
+    Category path
+  </ResponseField>
+  <ResponseField name="results[].maturity" type="number">
+    Maturity score
+  </ResponseField>
+  <ResponseField name="results[].values" type="object">
+    Tensor values (if include_values=true)
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="query" type="string">
+  Original query
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Number of results returned
+</ResponseField>
+
+```json
+{
+  "results": [
+    {
+      "tensor_id": "tensor-det-001",
+      "score": 0.92,
+      "entity_id": "entity-sherlock",
+      "description": "Detective persona with strong analytical and deductive reasoning skills",
+      "category": "profession/detective",
+      "maturity": 0.95,
+      "values": {
+        "context": [0.8, 0.7, 0.9, 0.6, 0.5, 0.7, 0.8, 0.9],
+        "biology": [0.3, 0.4, 0.5, 0.6],
+        "behavior": [0.9, 0.8, 0.7, 0.8, 0.9, 0.7, 0.6, 0.8]
+      }
+    },
+    {
+      "tensor_id": "tensor-det-002",
+      "score": 0.87,
+      "entity_id": "entity-colombo",
+      "description": "Detective with analytical mind and attention to detail",
+      "category": "profession/detective",
+      "maturity": 0.92,
+      "values": null
+    }
+  ],
+  "query": "detective with analytical thinking skills",
+  "total": 2
+}
+```
+
+### Errors
+
+- `503 Service Unavailable` - RAG not configured
+- `401 Unauthorized` - Missing or invalid API key
+
+## Find Similar Tensors
+
+Find tensors similar to a given tensor based on its description.
+
+```bash GET /search/similar/{tensor_id}
+curl -X GET "http://localhost:8080/search/similar/tensor-det-001?n_results=5" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="n_results" type="integer" default="5">
+  Maximum number of results
+</ParamField>
+
+### Response
+
+Returns search response with similar tensors (excludes the source tensor).
+
+```json
+{
+  "results": [
+    {
+      "tensor_id": "tensor-det-003",
+      "score": 0.89,
+      "entity_id": "entity-poirot",
+      "description": "Methodical detective with keen observation skills",
+      "category": "profession/detective",
+      "maturity": 0.94
+    }
+  ],
+  "query": "Similar to: tensor-det-001",
+  "total": 1
+}
+```
+
+### Errors
+
+- `404 Not Found` - Tensor doesn't exist
+- `403 Forbidden` - No read access to source tensor
+- `503 Service Unavailable` - RAG not configured
+
+## Compose Tensors
+
+Combine multiple tensors into a new composed tensor using various methods.
+
+```bash POST /search/compose
+curl -X POST http://localhost:8080/search/compose \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tensor_ids": ["tensor-001", "tensor-002", "tensor-003"],
+    "weights": [0.5, 0.3, 0.2],
+    "method": "weighted_blend"
+  }'
+```
+
+### Request Body
+
+<ParamField body="tensor_ids" type="array" required>
+  Array of tensor IDs to compose (2-10 tensors)
+</ParamField>
+
+<ParamField body="weights" type="array">
+  Optional weights for weighted composition (must match tensor count)
+</ParamField>
+
+<ParamField body="method" type="string" default="weighted_blend">
+  Composition method:
+  - `weighted_blend`: Weighted average of tensors
+  - `max_pool`: Maximum value across tensors
+  - `hierarchical`: Hierarchical composition
+</ParamField>
+
+### Response
+
+<ResponseField name="values" type="object">
+  Composed tensor values
+  <ResponseField name="values.context" type="array">
+    Context dimensions (8 values)
+  </ResponseField>
+  <ResponseField name="values.biology" type="array">
+    Biology dimensions (4 values)
+  </ResponseField>
+  <ResponseField name="values.behavior" type="array">
+    Behavior dimensions (8 values)
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="source_tensors" type="array">
+  Source tensor IDs used
+</ResponseField>
+
+<ResponseField name="method" type="string">
+  Composition method used
+</ResponseField>
+
+```json
+{
+  "values": {
+    "context": [0.6, 0.5, 0.7, 0.4, 0.5, 0.6, 0.7, 0.8],
+    "biology": [0.4, 0.5, 0.5, 0.6],
+    "behavior": [0.7, 0.6, 0.6, 0.7, 0.8, 0.6, 0.5, 0.7]
+  },
+  "source_tensors": ["tensor-001", "tensor-002", "tensor-003"],
+  "method": "weighted_blend"
+}
+```
+
+### Composition Methods
+
+#### Weighted Blend
+
+Computes weighted average of tensor values:
+
+```python
+composed[i] = sum(tensor[i] * weight[i] for i, weight in enumerate(weights))
+```
+
+If no weights provided, uses equal weights.
+
+#### Max Pool
+
+Takes maximum value at each dimension:
+
+```python
+composed[i] = max(tensor[i] for tensor in tensors)
+```
+
+#### Hierarchical
+
+Hierarchical composition with learned structure. Good for combining related concepts.
+
+### Errors
+
+- `400 Bad Request` - Invalid tensor count or weights mismatch
+- `403 Forbidden` - No read access to one or more tensors
+- `404 Not Found` - One or more tensors not found
+- `503 Service Unavailable` - RAG not configured
+
+## Permission Filtering
+
+All search operations automatically filter results to tensors you have access to:
+
+- **Private**: Only owner can see
+- **Shared**: Owner and explicitly shared users can see
+- **Public**: Everyone can see
+
+You'll never receive results for tensors you don't have permission to read.
+
+## Search Performance
+
+### Indexing
+
+Tensor descriptions are indexed using embeddings when RAG is enabled. The index is automatically updated when:
+
+- New tensors are created
+- Tensor descriptions are modified
+- Tensors are deleted
+
+### Query Performance
+
+Search queries typically complete in:
+
+- **Small datasets** (< 1,000 tensors): < 100ms
+- **Medium datasets** (1,000-10,000 tensors): 100-500ms
+- **Large datasets** (> 10,000 tensors): 500-2000ms
+
+### Best Practices
+
+1. **Use specific queries**: "detective with analytical skills" is better than "detective"
+2. **Set min_maturity**: Filter out immature tensors (e.g., `min_maturity: 0.8`)
+3. **Limit results**: Use `n_results` to get only what you need
+4. **Category filtering**: Use categories to narrow search space
+5. **Cache results**: Search results are deterministic for the same query and dataset
+
+## Example Workflows
+
+### Find and Compose Related Tensors
+
+```python
+import requests
+
+api_key = "tp_your_api_key_here"
+base_url = "http://localhost:8080"
+headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+
+# 1. Search for detective tensors
+response = requests.post(
+    f"{base_url}/search",
+    headers=headers,
+    json={
+        "query": "analytical detective persona",
+        "n_results": 3,
+        "min_maturity": 0.9
+    }
+)
+results = response.json()["results"]
+tensor_ids = [r["tensor_id"] for r in results]
+
+# 2. Compose them into a new tensor
+response = requests.post(
+    f"{base_url}/search/compose",
+    headers=headers,
+    json={
+        "tensor_ids": tensor_ids,
+        "method": "weighted_blend",
+        "weights": [0.5, 0.3, 0.2]
+    }
+)
+composed = response.json()
+print(f"Composed tensor: {composed['values']}")
+```
+
+### Find Similar Tensors
+
+```python
+# Get tensor ID
+tensor_id = "tensor-det-001"
+
+# Find similar tensors
+response = requests.get(
+    f"{base_url}/search/similar/{tensor_id}",
+    headers=headers,
+    params={"n_results": 5}
+)
+similar = response.json()
+
+for result in similar["results"]:
+    print(f"{result['tensor_id']}: {result['description']} (score: {result['score']})")
+```

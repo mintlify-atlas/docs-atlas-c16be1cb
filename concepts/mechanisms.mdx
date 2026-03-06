@@ -1,0 +1,776 @@
+---
+title: "19 Mechanisms"
+description: "Complete technical architecture organized by pillar"
+---
+
+## Overview
+
+Timepoint Pro's 19 mechanisms group into **five conceptual pillars**:
+
+<CardGroup cols={2}>
+  <Card title="Fidelity Management" icon="layer-group">
+    Allocate detail where queries land
+    
+    **Mechanisms**: M1, M2, M5, M6
+  </Card>
+  <Card title="Temporal Reasoning" icon="clock">
+    Multiple notions of time and causality
+    
+    **Mechanisms**: M7, M8, M12, M14, M17
+  </Card>
+  <Card title="Knowledge Provenance" icon="eye">
+    Track who knows what, from whom, when
+    
+    **Mechanisms**: M3, M4, M19
+  </Card>
+  <Card title="Entity Simulation" icon="users">
+    Generate and synthesize entity behavior
+    
+    **Mechanisms**: M9, M10, M11, M13, M15, M16
+  </Card>
+  <Card title="Infrastructure" icon="server">
+    Model selection, cost optimization
+    
+    **Mechanisms**: M18
+  </Card>
+</CardGroup>
+
+<Note>
+**The insight**: These ideas are the value; the mechanisms are derivable implementations. Full specification in [MECHANICS.md](https://github.com/timepoint-ai/timepoint-pro/blob/main/MECHANICS.md).
+</Note>
+
+---
+
+## Pillar 1: Fidelity Management
+
+### M1: Heterogeneous Fidelity Graphs
+
+Each (entity, timepoint) pair maintains **independent resolution**:
+
+```python
+Resolution Levels (ordered):
+TENSOR_ONLY < SCENE < GRAPH < DIALOG < TRAINED
+
+Example Graph:
+Timepoint(T0, "Constitutional Convention")
+├── Entity("washington", resolution=TRAINED, ~50k tokens)
+├── Entity("madison", resolution=DIALOG, ~10k tokens)  
+├── Entity("attendee_47", resolution=TENSOR_ONLY, ~200 tokens)
+└── causal_link → Timepoint(T1)
+```
+
+**Key properties**:
+- Resolution is **mutable**: queries elevate on-demand
+- System maintains both compressed and full representations
+- Fidelity concentrates around high-centrality entities at critical timepoints
+
+<Accordion title="Token Economics">
+  **Uniform high fidelity**: 100 entities × 10 timepoints × 50k = 50M tokens
+  
+  **Heterogeneous fidelity** (power-law): ~2.5M tokens → **95% reduction**
+</Accordion>
+
+[Read more: Fidelity Management →](/concepts/fidelity-management)
+
+---
+
+### M2: Progressive Training
+
+Entity quality exists on a **continuous spectrum** determined by accumulated interaction:
+
+```python
+EntityMetadata:
+    query_count: int              # Times queried
+    training_iterations: int      # LLM elaboration passes
+    eigenvector_centrality: float # Graph importance (0-1)
+    resolution_level: ResolutionLevel
+    last_accessed: datetime
+```
+
+**Elevation triggers**:
+- query_count > 3 → SCENE → GRAPH
+- query_count > 5 → GRAPH → DIALOG
+- query_count > 10 OR centrality > 0.8 → TRAINED
+
+<Accordion title="Example: Dr. Okonkwo in Castaway Colony">
+  Starts at SCENE (background doctor). After 3+ xenobiology queries ("Is lichen edible?", "Toxicity profile?"), progressively elevates to DIALOG then TRAINED. Becomes most detailed entity in biosphere scenes. Quality tracks expertise demand.
+</Accordion>
+
+---
+
+### M5: Query-Driven Lazy Resolution
+
+Resolution decisions happen **at query time, not simulation time**:
+
+```python
+def decide_resolution(entity, timepoint, query_history, thresholds):
+    if entity.query_count > thresholds.frequent_access:
+        return max(entity.resolution, DIALOG)
+    if entity.eigenvector_centrality > thresholds.central_node:
+        return max(entity.resolution, GRAPH)
+    if timepoint.importance_score > thresholds.critical_event:
+        return max(entity.resolution, SCENE)
+    return TENSOR_ONLY
+```
+
+**Key principle**: Never pay for detail nobody asked about.
+
+<Accordion title="Example: Navigator Jin Park">
+  Days 1-6: TENSOR_ONLY (~200 tokens/timepoint), inactive
+  
+  Day 7: Query about pre-crash beacon data triggers elevation to DIALOG
+  
+  Days 7-8: High-fidelity participation (10k tokens/timepoint)
+  
+  **Savings**: 400k tokens → 21k tokens (95% reduction)
+</Accordion>
+
+---
+
+### M6: Timepoint Tensor Model (TTM) Compression
+
+At TENSOR_ONLY resolution, entities are **structured tensors**:
+
+```python
+TTMTensor:
+    context_vector: np.ndarray   # Knowledge state (8 dims)
+    biology_vector: np.ndarray   # Physical attributes (4 dims)
+    behavior_vector: np.ndarray  # Personality/decision patterns (8 dims)
+
+# Context vector layout:
+# [0]=knowledge, [1]=valence, [2]=arousal, [3]=energy,
+# [4]=confidence, [5]=patience, [6]=risk, [7]=social
+
+# Compression ratios:
+# Full entity: ~50k tokens
+# TTM representation: ~1,600 tokens (97% compression)
+```
+
+**Structural preservation**: Tensors preserve enough structure for causal validation and can be re-expanded on query.
+
+<Accordion title="Example: Kepler-442b Biosphere Compression">
+  Alien ecosystem compressed as TTM tensor with `context_vector=[bioluminescence_intensity, electromagnetic_sensitivity, growth_rate]`, `biology_vector=[toxicity_index, nutrient_profile, symbiotic_relationships]`.
+  
+  **Size**: ~1,600 tokens (97% compression from 50k)
+  
+  **Query**: "How does flora respond to radio equipment?"
+  
+  **Reconstruction**: electromagnetic_sensitivity dimension reconstructs relevant behavior without decompressing entire biosphere
+</Accordion>
+
+#### Dual Tensor Architecture & Synchronization
+
+System maintains two representations:
+
+<Tabs>
+  <Tab title="TTMTensor">
+    **Purpose**: Trained, compressed storage
+    
+    **Scale**: 0-1 for most values
+    
+    **Location**: `entity.tensor`
+  </Tab>
+  <Tab title="CognitiveTensor">
+    **Purpose**: Runtime dialog synthesis
+    
+    **Scale**: -1 to 1 (valence), 0-100 (energy)
+    
+    **Location**: `entity.entity_metadata["cognitive_tensor"]`
+  </Tab>
+</Tabs>
+
+**Bidirectional sync**:
+```
+Entity Load → TTM→Cog Sync → Dialog → Updates → Cog→TTM Sync → Persist
+              (pretraining)                      (backprop)
+```
+
+[Read more: TTM Tensors →](/concepts/fidelity-management#m6-ttm-tensor-compression)
+
+---
+
+## Pillar 2: Temporal Reasoning
+
+### M17: Modal Temporal Causality
+
+**Five temporal modes**, each defining what "consistency" means:
+
+<Tabs>
+  <Tab title="FORWARD">
+    Standard causal DAG—causes precede effects
+    
+    **Use case**: Corporate board meetings, historical timelines
+  </Tab>
+  <Tab title="PORTAL">
+    Backward inference from fixed endpoints
+    
+    **Use case**: Strategic planning, critical path analysis
+  </Tab>
+  <Tab title="BRANCHING">
+    Counterfactual timelines diverge from decision points
+    
+    **Use case**: "What if" decision analysis
+  </Tab>
+  <Tab title="CYCLICAL">
+    Prophetic/mythic time—future constrains past
+    
+    **Use case**: Time loops, generational sagas
+  </Tab>
+  <Tab title="DIRECTORIAL">
+    Narrative time with flashbacks, dramatic tension
+    
+    **Use case**: Story arcs, training data for narrative models
+  </Tab>
+</Tabs>
+
+[Read more: Temporal Modes →](/concepts/temporal-modes)
+
+---
+
+### M7: Causal Temporal Chains
+
+Timepoints form **explicit causal chains**:
+
+```python
+Timepoint:
+    timepoint_id: str
+    timestamp: datetime
+    causal_parent: Optional[str]  # Explicit link to causing timepoint
+    event_description: str
+    entities_present: List[str]
+    importance_score: float
+```
+
+**Validation constraint**: Entity at timepoint T can only reference information from timepoints T' where a causal path exists from T' → T.
+
+<Note>
+This prevents anachronisms **structurally**, not heuristically.
+</Note>
+
+---
+
+### M8: Vertical Timepoint Expansion
+
+Timepoints can be **expanded vertically**—adding detail within a moment:
+
+```
+"Board Meeting" timepoint expands into:
+├── Arrival & small talk
+├── Opening remarks (CEO)
+├── Financial report (CFO)
+├── Key debate (product strategy)
+├── Decision & vote
+└── Aftermath discussions
+
+All causally linked but temporally simultaneous
+```
+
+---
+
+### M12: Counterfactual Branching
+
+Create **alternate timelines** from intervention points:
+
+```python
+def create_counterfactual_branch(parent_timeline, intervention_point, intervention):
+    branch = Timeline(parent_id=parent_timeline.id, branch_point=intervention_point)
+    
+    # Copy timepoints before intervention
+    for tp in parent_timeline.get_timepoints_before(intervention_point):
+        branch.add_timepoint(tp.deep_copy())
+    
+    # Apply intervention
+    branch_tp = parent_timeline.get_timepoint(intervention_point).deep_copy()
+    apply_intervention(branch_tp, intervention)
+    branch.add_timepoint(branch_tp)
+    
+    # Propagate causal effects forward
+    propagate_causal_effects(branch, intervention_point)
+    
+    return branch
+```
+
+<Accordion title="Example: Castaway Colony Day 7 Branches">
+  Commander Tanaka's decision spawns 3 branches:
+  
+  - **Branch A (Fortify & Wait)**: Conservative resources, focus shelter
+  - **Branch B (Explore & Adapt)**: Send teams, discover flora + caves
+  - **Branch C (Repair & Signal)**: All resources to beacon
+  
+  Each branch **internally consistent**: Branch B can't use cave from Branch A's timeline
+</Accordion>
+
+[Read more: Branching Mode →](/concepts/temporal-modes#branching-mode)
+
+---
+
+### M14: Circadian Activity Patterns
+
+Entities have **activity probabilities** that vary with time:
+
+```python
+def get_activity_probability(hour: int, activity: str) -> float:
+    probability_map = {
+        "sleep": lambda h: 0.95 if 0 <= h < 6 else 0.05,
+        "work": lambda h: 0.7 if 9 <= h < 17 else 0.1,
+        "social": lambda h: 0.6 if 18 <= h < 23 else 0.2,
+    }
+    return probability_map.get(activity, lambda h: 0.0)(hour)
+```
+
+Constrains entity behavior plausibly without explicit scheduling.
+
+---
+
+## Pillar 3: Knowledge Provenance
+
+### M3: Exposure Event Tracking
+
+Knowledge acquisition is **logged as exposure events**:
+
+```python
+ExposureEvent:
+    entity_id: str
+    event_type: EventType  # witnessed, learned, told, experienced
+    information: str       # The knowledge item
+    source: Optional[str]  # Another entity or external source
+    timestamp: datetime
+    confidence: float      # 0.0-1.0
+    timepoint_id: str
+```
+
+**Validation constraint**: `entity.knowledge_state ⊆ {e.information for e in entity.exposure_events where e.timestamp ≤ query_timestamp}`
+
+<Warning>
+**Iron law**: An entity cannot know something without a recorded exposure event.
+</Warning>
+
+[Read more: Knowledge Provenance →](/concepts/knowledge-provenance)
+
+---
+
+### M4: Constraint Enforcement
+
+**Five validators** enforce consistency using conservation-law metaphors:
+
+<AccordionGroup>
+  <Accordion title="Information Conservation (Shannon)">
+    Knowledge state cannot exceed exposure history
+    
+    ```python
+    violations = entity.knowledge_state - set(exposure_events)
+    ```
+  </Accordion>
+  <Accordion title="Energy Budget (Thermodynamic)">
+    Bounded cognitive/physical energy per timepoint
+    
+    ```python
+    total_cost = sum(action.energy_cost)
+    valid = total_cost <= entity.energy_budget
+    ```
+  </Accordion>
+  <Accordion title="Behavioral Inertia">
+    Personality persists; sudden changes need justification
+    
+    ```python
+    delta = norm(new_traits - old_traits)
+    max_change = 0.1 * timespan.days
+    ```
+  </Accordion>
+  <Accordion title="Biological Constraints">
+    Physical limitations constrain behavior
+    
+    ```python
+    if action.requires_mobility and entity.mobility < 0.3:
+        raise ValidationError
+    ```
+  </Accordion>
+  <Accordion title="Network Flow">
+    Information propagates along relationship edges
+    
+    ```python
+    path = nx.shortest_path(graph, source, target)
+    if not path: raise ValidationError
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+### M19: Knowledge Extraction Agent
+
+**LLM-based extraction** replaces naive capitalization heuristics:
+
+```python
+KnowledgeItem:
+    content: str                # Complete semantic unit
+    speaker: str                # Entity who communicated
+    listeners: List[str]        # Entities who received it
+    category: str               # fact, decision, opinion, plan, revelation
+    confidence: float           # 0.0-1.0
+    causal_relevance: float     # 0.0-1.0
+```
+
+**What gets extracted**:
+- ✅ "Board approved $2M budget increase" (decision)
+- ✅ "Prototype failed last week" (revelation)
+- ❌ "Hello", "Thanks" (greetings)
+- ❌ "We'll", "I've" (contractions)
+
+**RAG-aware**: Agent receives causal context to avoid redundant extraction and recognize novel information.
+
+[Read more: M19 Knowledge Extraction →](/concepts/knowledge-provenance#m19-knowledge-extraction-agent)
+
+---
+
+## Pillar 4: Entity Simulation
+
+### M9: On-Demand Entity Generation
+
+Queries may reference **entities that don't exist yet**:
+
+```python
+def detect_entity_gap(query, existing_entities):
+    referenced = extract_entity_names(query)
+    missing = referenced - set(existing_entities)
+    return missing
+
+def generate_entity_on_demand(name, context):
+    # LLM generates plausible entity given scenario context
+```
+
+<Accordion title="Example: Castaway Colony Cargo Bay">
+  **Query**: "What did crew find in cargo bay 3?"
+  
+  **Result**: System generates inventory entities on-demand—supply crates with plausible damage states and utility values, causally consistent with research vessel scenario
+</Accordion>
+
+---
+
+### M10: Scene-Level Entity Sets
+
+Scenes have **entity types** that influence individual behavior:
+
+<Tabs>
+  <Tab title="EnvironmentEntity">
+    Physical space: location, capacity, lighting, weather, acoustics
+  </Tab>
+  <Tab title="AtmosphereEntity">
+    Emergent mood: tension_level, formality, emotional_valence, energy_level
+  </Tab>
+  <Tab title="CrowdEntity">
+    Collective behavior: size, density, mood_distribution, movement_pattern
+  </Tab>
+</Tabs>
+
+Individual entity behavior synthesized in context of scene-level state.
+
+---
+
+### M11: Dialog Synthesis
+
+**Per-character turn generation** via LangGraph steering:
+
+```
+steering_node → character_node → quality_gate_node → conditional
+                                                       ├→ steering (continue)
+                                                       ├→ END (complete)
+                                                       └→ character (retry)
+```
+
+<AccordionGroup>
+  <Accordion title="Steering Node">
+    Selects next speaker, evaluates narrative progress, injects mood shifts, can suppress or end dialog
+  </Accordion>
+  <Accordion title="Character Node">
+    Generates ONE turn using:
+    - `PersonaParams` (temperature, top_p, max_tokens from entity state)
+    - `FourthWallContext` (two-layer: back=voice shaping, front=content)
+  </Accordion>
+  <Accordion title="Quality Gate Node">
+    Surface heuristics first (cheap), then semantic evaluation:
+    - Narrative advancement
+    - Conflict specificity
+    - Voice distinctiveness
+  </Accordion>
+</AccordionGroup>
+
+#### Params2Persona: Entity State → LLM Parameters
+
+```python
+| Parameter | Source | Effect |
+|-----------|--------|--------|
+| temperature | arousal × energy | High arousal → varied (~1.1) |
+| top_p | arousal | Agitated → focused vocabulary |
+| max_tokens | turn × energy | Later turns + low energy → shorter |
+| frequency_penalty | behavior_vector[5] | Vocabulary richness |
+| presence_penalty | behavior_vector[6] | Novelty seeking |
+```
+
+#### Fourth Wall Context (Two-Layer)
+
+- **Back Layer** (shapes HOW): true emotional state, withheld knowledge, suppressed impulses
+- **Front Layer** (character knows WHAT): filtered knowledge, natural-language relationships
+
+Knowledge limits scale with resolution: TENSOR=5 items, SCENE=8, GRAPH=12, DIALOG=16, TRAINED=20.
+
+---
+
+### M13: Multi-Entity Synthesis
+
+**Relationships evolve** and can be analyzed:
+
+```python
+RelationshipMetrics:
+    shared_knowledge: Set[str]
+    belief_alignment: float
+    interaction_count: int
+    trust_level: float
+    power_dynamic: float
+
+def analyze_relationship_evolution(entity_a, entity_b, timespan):
+    # Track metric changes over timepoints
+    
+def detect_contradictions(entities, timepoint):
+    # Find belief conflicts
+```
+
+---
+
+### M15: Entity Prospection (Extended Inner Life)
+
+Entities **model their own futures**:
+
+```python
+ProspectiveState:
+    entity_id: str
+    forecast_horizon: timedelta
+    expectations: List[Expectation]
+    contingency_plans: Dict[str, List[Action]]
+    anxiety_level: float
+    # Extended proception (post-dialog)
+    withheld_knowledge: List[Dict]       # Chose not to say
+    suppressed_impulses: List[Dict]      # Wanted but held back
+    episodic_memory: List[Dict]          # Personality-filtered memories
+    rumination_topics: List[Dict]        # Recurring concerns
+```
+
+**Post-dialog proception** updates inner life:
+1. **Episodic memory**: LLM generates personality-filtered memories
+2. **Rumination**: Topics addressed lose intensity; unresolved intensify
+3. **Withheld knowledge**: Persists, feeds back into Fourth Wall
+4. **Suppressed impulses**: Feeds into future dialog tension
+
+---
+
+### M16: Animistic Entity Extension
+
+Objects, institutions, places can have **agency**:
+
+```python
+class AnimismLevel:
+    0: Only humans
+    1: Humans + animals/buildings
+    2: All objects/organisms  
+    3: Abstract concepts
+    4: Adaptive (AnyEntity)
+    5: Spiritual (KamiEntity)
+    6: AI agents
+```
+
+Conference room "wants" productive meetings; codebase "resists" certain changes.
+
+**Dialog enforcement**: `_filter_dialog_participants()` uses thresholds:
+
+| Entity Type | Min Level | Speaking Mode |
+|-------------|-----------|---------------|
+| human | 0 | Normal dialog |
+| animal | 1 | Behavioral narration (3rd person) |
+| building | 2 | Environmental narration (sensory) |
+| abstract | 3 | Collective consciousness |
+
+---
+
+## Pillar 5: Infrastructure
+
+### M18: Intelligent Model Selection
+
+**Capability-based model selection**—different actions need different models:
+
+<Tabs>
+  <Tab title="16 Action Types">
+    - ENTITY_POPULATION
+    - DIALOG_SYNTHESIS
+    - TEMPORAL_REASONING
+    - COUNTERFACTUAL_PREDICTION
+    - KNOWLEDGE_VALIDATION
+    - SCENE_GENERATION
+    - RELATIONSHIP_ANALYSIS
+    - PROSPECTION
+    - ANIMISTIC_BEHAVIOR
+    - PORTAL_BACKWARD_REASONING
+    - PORTAL_PATH_SCORING
+    - CONFIG_GENERATION
+    - TENSOR_COMPRESSION
+    - VALIDATION
+    - SUMMARIZATION
+    - GENERAL
+  </Tab>
+  <Tab title="15 Capabilities">
+    - STRUCTURED_JSON
+    - LONG_FORM_TEXT
+    - DIALOG_GENERATION
+    - MATHEMATICAL
+    - LOGICAL_REASONING
+    - CAUSAL_REASONING
+    - TEMPORAL_REASONING
+    - LARGE_CONTEXT (32k+)
+    - VERY_LARGE_CONTEXT (128k+)
+    - FAST_INFERENCE
+    - COST_EFFICIENT
+    - HIGH_QUALITY
+    - CREATIVE
+    - ANALYTICAL
+    - INSTRUCTION_FOLLOWING
+  </Tab>
+</Tabs>
+
+**Model Registry** (open-source only, licenses permit commercial synthetic data):
+
+| Model | Context | Strengths | License |
+|-------|---------|-----------|----------|
+| Llama 3.1 8B | 128k | Fast, cost-efficient | Llama 3.1 |
+| Llama 3.1 70B | 128k | Balanced, dialog | Llama 3.1 |
+| Llama 3.1 405B | 128k | Highest quality | Llama 3.1 |
+| Llama 4 Scout | 512k | Multimodal, huge context | Llama 4 |
+| Qwen 2.5 7B | 32k | JSON, code | Qwen |
+| Qwen 2.5 72B | 128k | Structured output | Qwen |
+| QwQ 32B | 32k | Math, logical reasoning | Qwen |
+| DeepSeek Chat | 64k | Balanced, analytical | **MIT** |
+| DeepSeek R1 | 64k | Deep reasoning, math | **MIT** |
+| Mistral 7B | 32k | Fast, creative | Apache 2.0 |
+| Mixtral 8x7B | 32k | Balanced | Apache 2.0 |
+| Mixtral 8x22B | 64k | High quality | Apache 2.0 |
+
+**Automatic selection**:
+```python
+action = ActionType.DIALOG_SYNTHESIS
+model = selector.select_model(action, context_size=5000)
+# → Returns: meta-llama/llama-3.1-70b-instruct (dialog strength)
+
+action = ActionType.PORTAL_PATH_SCORING  
+model = selector.select_model(action, context_size=15000)
+# → Returns: deepseek/deepseek-r1 (reasoning + MIT license)
+```
+
+<Note>
+**Training data filter**: When `for_training_data=True`, selector automatically filters to MIT/Apache-2.0 models. Llama outputs can only train Llama models per license restrictions.
+</Note>
+
+---
+
+## Mechanism Map
+
+<Frame>
+  <img src="/images/mechanism-map.png" alt="Visual map of 19 mechanisms" />
+</Frame>
+
+| ID | Name | Pillar | Key Affordance |
+|----|------|--------|----------------|
+| **M1** | Heterogeneous Fidelity Graphs | Fidelity | Power-law resolution distribution |
+| **M2** | Progressive Training | Fidelity | Quality as continuous spectrum |
+| **M5** | Query-Driven Lazy Resolution | Fidelity | Never pay for unused detail |
+| **M6** | TTM Tensor Compression | Fidelity | 97% compression with structure |
+| **M7** | Causal Temporal Chains | Temporal | Explicit timepoint ancestry |
+| **M8** | Vertical Timepoint Expansion | Temporal | Detail within moments |
+| **M12** | Counterfactual Branching | Temporal | Alternate timeline propagation |
+| **M14** | Circadian Activity Patterns | Temporal | Time-of-day behavior modulation |
+| **M17** | Modal Temporal Causality | Temporal | 5 causality regimes |
+| **M3** | Exposure Event Tracking | Provenance | Logged knowledge acquisition |
+| **M4** | Constraint Enforcement | Provenance | Conservation-law validation |
+| **M19** | Knowledge Extraction Agent | Provenance | LLM-based semantic extraction |
+| **M9** | On-Demand Entity Generation | Entity | Generate missing entities |
+| **M10** | Scene-Level Entity Sets | Entity | Environment/atmosphere/crowd |
+| **M11** | Dialog Synthesis | Entity | Per-character turn generation |
+| **M13** | Multi-Entity Synthesis | Entity | Relationship evolution tracking |
+| **M15** | Entity Prospection | Entity | Extended inner life |
+| **M16** | Animistic Entity Extension | Entity | Object/institution agency |
+| **M18** | Intelligent Model Selection | Infrastructure | Capability-based routing |
+
+---
+
+## Quick Reference
+
+<AccordionGroup>
+  <Accordion title="Reduce Costs?">
+    Use **M1 (Heterogeneous Fidelity)** + **M5 (Lazy Resolution)** + **M6 (TTM Compression)**
+    
+    Allocate detail where queries land, compress background entities
+  </Accordion>
+  <Accordion title="Prevent Anachronisms?">
+    Use **M3 (Exposure Events)** + **M4 (Constraint Enforcement)** + **M7 (Causal Chains)**
+    
+    Track knowledge provenance, validate temporal ordering
+  </Accordion>
+  <Accordion title="Test Decisions?">
+    Use **M12 (Counterfactual Branching)** with **BRANCHING mode (M17)**
+    
+    Create alternate timelines from intervention points
+  </Accordion>
+  <Accordion title="Strategic Planning?">
+    Use **PORTAL mode (M17)** with **M7 (Causal Chains)**
+    
+    Backward reasoning from fixed endpoints
+  </Accordion>
+  <Accordion title="Rich Dialog?">
+    Use **M11 (Dialog Synthesis)** + **M15 (Prospection)** + **M19 (Knowledge Extraction)**
+    
+    Per-character generation with inner life and semantic knowledge tracking
+  </Accordion>
+  <Accordion title="Multiple Timelines?">
+    Use **M8 (Vertical Expansion)** + **M12 (Branching)** + **M17 (Modal Causality)**
+    
+    Combine vertical detail and horizontal counterfactuals
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Implementation Status
+
+All 19 mechanisms are **fully implemented and tested**:
+
+- ✅ **142 ADPRS tests** (124 unit + 18 integration)
+- ✅ **21 verified templates** across 5 temporal modes
+- ✅ **All showcase scenarios passing** (including `castaway_colony_branching` full 19-mechanism showcase)
+- ✅ **Model selection with 12 open-source models**
+- ✅ **TDF export format** for suite interoperability
+
+<Note>
+**Costs**: $0.15–$1.00 per run. All 21 templates verified February 16, 2026.
+</Note>
+
+---
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="SNAG vs RAG" icon="diagram-project" href="/concepts/snag">
+    How SNAG grounds LLMs in social graphs
+  </Card>
+  <Card title="Temporal Modes" icon="clock" href="/concepts/temporal-modes">
+    5 ways to reason about causality
+  </Card>
+  <Card title="Fidelity Management" icon="layer-group" href="/concepts/fidelity-management">
+    95% cost reduction deep dive
+  </Card>
+  <Card title="Knowledge Provenance" icon="eye" href="/concepts/knowledge-provenance">
+    Exposure events and causal audit
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/quick-start">
+    Run your first simulation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Complete API documentation
+  </Card>
+</CardGroup>

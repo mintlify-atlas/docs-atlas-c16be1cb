@@ -1,0 +1,381 @@
+---
+title: 'SQLite Database Export'
+description: 'Queryable relational database schema for simulation data'
+---
+
+## Overview
+
+Timepoint Pro exports simulation data as SQLite databases with a normalized relational schema. This format enables SQL queries, joins, and analytics on entities, timepoints, dialogs, and causal relationships.
+
+All simulation state lives in `timepoint.db` during runs. Metadata (runs, costs, mechanisms) lives in `metadata/runs.db`.
+
+## Database Schema
+
+### Core Tables
+
+#### `entity` Table
+
+Entity state with cognitive and physical tensors:
+
+```sql
+CREATE TABLE entity (
+    id INTEGER PRIMARY KEY,
+    entity_id TEXT UNIQUE NOT NULL,
+    entity_type TEXT DEFAULT 'human',
+    timepoint TEXT,
+    temporal_span_start DATETIME,
+    temporal_span_end DATETIME,
+    tensor TEXT,  -- JSON: Serialized TTM (context, biology, behavior)
+    training_count INTEGER DEFAULT 0,
+    query_count INTEGER DEFAULT 0,
+    eigenvector_centrality REAL DEFAULT 0.0,
+    resolution_level TEXT DEFAULT 'tensor_only',
+    entity_metadata TEXT,  -- JSON: physical_tensor, cognitive_tensor
+    tensor_maturity REAL DEFAULT 0.0,
+    tensor_training_cycles INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_entity_id ON entity(entity_id);
+CREATE INDEX idx_entity_timepoint ON entity(timepoint);
+```
+
+Example row:
+```sql
+INSERT INTO entity VALUES (
+    1,
+    'sarah_okafor',
+    'human',
+    'tp_000_2031',
+    '2031-01-15 14:30:00',
+    NULL,
+    '{"context_vector": "...", "biology_vector": "...", "behavior_vector": "..."}',
+    3,
+    42,
+    0.42,
+    'dialog',
+    '{"cognitive_tensor": {"emotional_valence": 0.47, "emotional_arousal": 0.57, "energy_budget": 124.4}, "physical_tensor": {"age": 35.0}}',
+    0.95,
+    3
+);
+```
+
+#### `timepoint` Table
+
+Temporal events with causal links:
+
+```sql
+CREATE TABLE timepoint (
+    id INTEGER PRIMARY KEY,
+    timepoint_id TEXT UNIQUE NOT NULL,
+    timeline_id TEXT,
+    timestamp DATETIME NOT NULL,
+    event_description TEXT NOT NULL,
+    entities_present TEXT,  -- JSON array
+    causal_parent TEXT,  -- Foreign key to timepoint_id
+    resolution_level TEXT DEFAULT 'scene',
+    run_id TEXT
+);
+
+CREATE INDEX idx_timepoint_id ON timepoint(timepoint_id);
+CREATE INDEX idx_timeline_id ON timepoint(timeline_id);
+CREATE INDEX idx_causal_parent ON timepoint(causal_parent);
+CREATE INDEX idx_run_id ON timepoint(run_id);
+```
+
+Example row:
+```sql
+INSERT INTO timepoint VALUES (
+    1,
+    'tp_000_2031',
+    'timeline_001',
+    '2031-01-15 14:30:00',
+    'Mission failure: loses contact during orbital insertion',
+    '["sarah_okafor", "raj_mehta", "lin_zhang", "thomas_webb"]',
+    NULL,  -- No parent (endpoint in PORTAL mode)
+    'dialog',
+    'run_20260218_091456_55697771'
+);
+```
+
+#### `exposure_events` Table
+
+Knowledge provenance (M3):
+
+```sql
+CREATE TABLE exposure_event (
+    id INTEGER PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,  -- witnessed, learned, told, experienced
+    information TEXT NOT NULL,
+    source TEXT,
+    timestamp DATETIME NOT NULL,
+    confidence REAL DEFAULT 1.0,
+    timepoint_id TEXT,
+    run_id TEXT,
+    FOREIGN KEY (entity_id) REFERENCES entity(entity_id)
+);
+
+CREATE INDEX idx_exposure_entity ON exposure_event(entity_id);
+CREATE INDEX idx_exposure_timepoint ON exposure_event(timepoint_id);
+CREATE INDEX idx_exposure_run ON exposure_event(run_id);
+```
+
+Example row:
+```sql
+INSERT INTO exposure_event VALUES (
+    1,
+    'lin_zhang',
+    'learned',
+    'Oxygen generator has 30% failure probability',
+    'technical_analysis',
+    '2027-01-15 14:30:00',
+    0.95,
+    'tp_004_2027',
+    'run_20260218_091456_55697771'
+);
+```
+
+#### `dialog` Table
+
+Dialog conversations:
+
+```sql
+CREATE TABLE dialog (
+    id INTEGER PRIMARY KEY,
+    dialog_id TEXT UNIQUE NOT NULL,
+    timepoint_id TEXT NOT NULL,
+    participants TEXT,  -- JSON array
+    turns TEXT,  -- JSON array of DialogTurn objects
+    context_used TEXT,  -- JSON dict
+    duration_seconds INTEGER,
+    information_transfer_count INTEGER DEFAULT 0,
+    created_at DATETIME,
+    run_id TEXT,
+    FOREIGN KEY (timepoint_id) REFERENCES timepoint(timepoint_id)
+);
+
+CREATE INDEX idx_dialog_id ON dialog(dialog_id);
+CREATE INDEX idx_dialog_timepoint ON dialog(timepoint_id);
+CREATE INDEX idx_dialog_run ON dialog(run_id);
+```
+
+Example row:
+```sql
+INSERT INTO dialog VALUES (
+    1,
+    'dialog_tp_000_2031',
+    'tp_000_2031',
+    '["sarah_okafor", "raj_mehta"]',
+    '[{"speaker": "sarah_okafor", "content": "We need to address the oxygen generator.", "timestamp": "2031-01-15T14:30:00Z", "emotional_tone": "concerned"}]',
+    '{"m3_knowledge_provenance": true, "m6_entity_state": true, "m7_causal_history": true}',
+    180,
+    5,
+    '2026-03-06 12:34:56',
+    'run_20260218_091456_55697771'
+);
+```
+
+### Metadata Tables (metadata/runs.db)
+
+#### `runs` Table
+
+Simulation run metadata:
+
+```sql
+CREATE TABLE runs (
+    id INTEGER PRIMARY KEY,
+    run_id TEXT UNIQUE NOT NULL,
+    world_id TEXT NOT NULL,
+    temporal_mode TEXT NOT NULL,
+    scenario_description TEXT,
+    entity_count INTEGER,
+    timepoint_count INTEGER,
+    dialog_count INTEGER,
+    dialog_turns INTEGER,
+    cost_usd REAL,
+    tokens_used INTEGER,
+    llm_calls INTEGER,
+    duration_seconds INTEGER,
+    status TEXT,
+    created_at DATETIME,
+    completed_at DATETIME
+);
+```
+
+#### `mechanism_usage` Table
+
+Mechanism activation tracking:
+
+```sql
+CREATE TABLE mechanism_usage (
+    id INTEGER PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    mechanism_id TEXT NOT NULL,
+    timepoint_id TEXT,
+    activated BOOLEAN,
+    metadata TEXT,  -- JSON
+    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+);
+```
+
+## SQL Query Examples
+
+### Find entities present at multiple timepoints
+
+```sql
+SELECT 
+    e.entity_id,
+    COUNT(DISTINCT e.timepoint) as timepoint_count,
+    AVG(json_extract(e.entity_metadata, '$.cognitive_tensor.emotional_valence')) as avg_valence
+FROM entity e
+WHERE e.entity_type = 'human'
+GROUP BY e.entity_id
+HAVING timepoint_count > 3
+ORDER BY avg_valence DESC;
+```
+
+### Find causal chain for a timepoint
+
+```sql
+WITH RECURSIVE causal_chain AS (
+    SELECT timepoint_id, event_description, causal_parent, 0 as depth
+    FROM timepoint
+    WHERE timepoint_id = 'tp_000_2031'
+    
+    UNION ALL
+    
+    SELECT t.timepoint_id, t.event_description, t.causal_parent, c.depth + 1
+    FROM timepoint t
+    INNER JOIN causal_chain c ON t.timepoint_id = c.causal_parent
+)
+SELECT * FROM causal_chain ORDER BY depth;
+```
+
+### Find knowledge transfer events
+
+```sql
+SELECT 
+    ee.entity_id,
+    ee.information,
+    ee.source,
+    ee.confidence,
+    t.event_description,
+    t.timestamp
+FROM exposure_event ee
+INNER JOIN timepoint t ON ee.timepoint_id = t.timepoint_id
+WHERE ee.event_type = 'told'
+ORDER BY t.timestamp;
+```
+
+### Find most central entities
+
+```sql
+SELECT 
+    entity_id,
+    MAX(eigenvector_centrality) as max_centrality,
+    COUNT(*) as appearance_count,
+    AVG(query_count) as avg_queries
+FROM entity
+GROUP BY entity_id
+ORDER BY max_centrality DESC
+LIMIT 10;
+```
+
+### Analyze dialog participation
+
+```sql
+SELECT 
+    json_each.value as entity_id,
+    COUNT(*) as dialog_count,
+    SUM(d.duration_seconds) as total_seconds,
+    AVG(d.information_transfer_count) as avg_info_transfer
+FROM dialog d, json_each(d.participants)
+GROUP BY entity_id
+ORDER BY dialog_count DESC;
+```
+
+## Export Configuration
+
+Enable SQLite export in `OutputConfig`:
+
+```python
+from generation.config_schema import SimulationConfig, OutputConfig
+
+config = SimulationConfig(
+    scenario_description="...",
+    world_id="...",
+    outputs=OutputConfig(
+        formats=["sqlite"]
+    )
+)
+```
+
+## Using ExportFormatFactory
+
+```python
+from reporting.export_formats import ExportFormatFactory
+
+# Create SQLite exporter
+exporter = ExportFormatFactory.create("sqlite")
+
+# Export data (overwrite existing)
+data = {
+    "entities": [...],
+    "timepoints": [...],
+    "dialogs": [...],
+    "exposure_events": [...]
+}
+exporter.export(data, "simulation.db", overwrite=True)
+```
+
+## Querying from Python
+
+```python
+import sqlite3
+import pandas as pd
+
+# Connect to database
+conn = sqlite3.connect("timepoint.db")
+
+# Query with pandas
+df = pd.read_sql_query("""
+    SELECT 
+        e.entity_id,
+        t.event_description,
+        json_extract(e.entity_metadata, '$.cognitive_tensor.emotional_valence') as valence
+    FROM entity e
+    INNER JOIN timepoint t ON e.timepoint = t.timepoint_id
+    WHERE t.run_id = 'run_20260218_091456_55697771'
+""", conn)
+
+print(df.head())
+```
+
+## Schema Inference
+
+The SQLite exporter automatically infers column types:
+
+- `bool` → `INTEGER`
+- `int` → `INTEGER`
+- `float` → `REAL`
+- `dict`, `list` → `TEXT` (stored as JSON)
+- Other → `TEXT`
+
+## Database Size
+
+Typical database sizes:
+
+| Simulation | Entities | Timepoints | Dialogs | Size |
+|------------|----------|------------|---------|------|
+| mars_mission_portal | 4 | 6 | 6 | ~500 KB |
+| castaway_colony_branching | 8 | 16 | 24 | ~2 MB |
+| jefferson_dinner | 10 | 1 | 1 | ~200 KB |
+
+Compression not supported (binary format already efficient).
+
+## See Also
+
+- [TDF Format](/export/tdf) - JSON-LD interchange format
+- [JSONL Training Data](/export/jsonl) - ML training format
+- [SQLModel Schemas](https://github.com/timepoint-ai/timepoint-pro/blob/main/schemas.py)
+- [Example Run](https://github.com/timepoint-ai/timepoint-pro/blob/main/EXAMPLE_RUN.md)

@@ -1,0 +1,290 @@
+---
+title: 'Local Development'
+description: 'Run Timepoint Pro locally with SQLite and no cloud dependencies'
+---
+
+## Overview
+
+Timepoint Pro is designed to run entirely locally with zero cloud dependencies. The standalone engine uses SQLite for storage and connects directly to OpenRouter for LLM access. Anyone with an OpenRouter API key can run the full simulation pipeline on their local machine.
+
+## Architecture: Isolation by Design
+
+Timepoint Pro is a **standalone simulation engine** with no runtime dependencies on Flash, Billing, Clockchain, or any other Timepoint Suite service:
+
+- All LLM calls go directly to OpenRouter
+- All data stays in local SQLite + flat files
+- No cloud services required for core functionality
+- Fully forkable and self-contained
+
+This isolation is intentional—the public repo must remain independently runnable.
+
+## Prerequisites
+
+- Python 3.10+
+- OpenRouter API key ([get one here](https://openrouter.ai/keys))
+- (Optional) Groq API key for ultra-fast inference ([free key](https://console.groq.com))
+- (Optional) Oxen API key for dataset uploads
+
+## Quick Start
+
+### 1. Clone and Install
+
+```bash
+git clone https://github.com/timepoint-ai/timepoint-pro.git
+cd timepoint-pro
+pip install -r requirements.txt
+```
+
+### 2. Configure Environment
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your API keys:
+
+```bash
+# Required: OpenRouter API Key
+OPENROUTER_API_KEY=your_key_here
+
+# Optional: Groq API Key (for ultra-fast inference)
+GROQ_API_KEY=your_groq_key_here
+
+# LLM Service Configuration
+LLM_SERVICE_ENABLED=true
+
+# Optional: Override default model
+# LLM_MODEL=meta-llama/llama-3.1-70b-instruct
+
+# Optional: Database configuration (defaults to SQLite)
+# DATABASE_URL=sqlite:///timepoint.db
+```
+
+### 3. Run Your First Simulation
+
+```bash
+# List all available templates
+./run.sh list
+
+# Run a showcase template
+./run.sh run board_meeting
+
+# Or use the direct shortcut
+./run.sh board_meeting
+```
+
+## The `./run.sh` Command Center
+
+The `run.sh` script is the single entry point for all simulation operations:
+
+```bash
+# Run simulations
+./run.sh run board_meeting              # Single template
+./run.sh quick                          # All quick-tier templates
+./run.sh run --tier quick --parallel 4  # Parallel execution
+
+# Use free models ($0 cost)
+./run.sh run --free board_meeting
+./run.sh run --free-fast quick
+
+# Groq ultra-fast inference (5-10x faster)
+./run.sh run --groq board_meeting       # Llama 3.3 70B (~300 tok/s)
+./run.sh run --fast board_meeting       # Mixtral 8x7B (~200 tok/s)
+
+# Portal mode (backward reasoning)
+./run.sh run mars_mission_portal
+./run.sh run --portal-quick board_meeting
+
+# View results
+./run.sh status                         # Show recent runs
+./run.sh status run_20241207_123456     # Specific run
+
+# Export data
+./run.sh export last                    # Export latest run
+./run.sh export last --format json
+
+# Testing
+./run.sh test                           # All pytest tests
+./run.sh test synth                     # SynthasAIzer tests
+./run.sh test mechanisms                # M1-M19 mechanism tests
+```
+
+## Local Storage
+
+All data is stored locally in SQLite databases:
+
+- `metadata/runs.db` - Run metadata, entity states, dialog history
+- `metadata/tensors.db` - Entity tensor states (compressed representations)
+- `exports/` - Exported simulation artifacts (markdown, JSON, TDF)
+
+## Development Workflow
+
+### Run Templates
+
+```bash
+# By tier
+./run.sh quick                    # Quick tests (~$0.02-0.05 each)
+./run.sh standard                 # Standard tests (~$0.05-0.20)
+./run.sh comprehensive            # Thorough tests (~$0.20-1.00)
+
+# By category
+./run.sh run --category showcase  # Production scenarios
+./run.sh run --category convergence  # Consistency tests
+
+# With cost controls
+./run.sh run --budget 0.50 quick  # Stop if cost exceeds $0.50
+./run.sh run --dry-run quick      # Show cost estimate without running
+```
+
+### Testing
+
+```bash
+# Unit tests
+./run.sh test unit
+
+# Mechanism tests (M1-M19)
+./run.sh test mechanisms
+./run.sh test m7              # Specific mechanism
+
+# SynthasAIzer tests (142 ADPRS tests)
+./run.sh test synth
+
+# With coverage
+./run.sh test --coverage
+```
+
+### Convergence Analysis
+
+```bash
+# Run template multiple times and analyze convergence
+./run.sh convergence e2e board_meeting
+./run.sh convergence e2e --runs 5 convergence_simple
+
+# View convergence history
+./run.sh convergence history
+```
+
+## Performance Options
+
+### Free Models
+
+Run simulations at $0 cost using free models:
+
+```bash
+./run.sh run --free board_meeting         # Best quality free
+./run.sh run --free-fast quick            # Fastest free
+./run.sh run --list-free-models           # List available free models
+```
+
+### Groq Ultra-Fast Inference
+
+Groq's LPU (Language Processing Unit) hardware provides 5-10x faster inference:
+
+```bash
+# Requires GROQ_API_KEY in .env (free at console.groq.com)
+./run.sh run --groq board_meeting         # Llama 3.3 70B (~300 tok/s)
+./run.sh run --fast board_meeting         # Mixtral 8x7B (~200 tok/s)
+```
+
+### Model Override
+
+```bash
+./run.sh run --model deepseek/deepseek-chat board_meeting
+./run.sh run --model meta-llama/llama-3.1-70b-instruct quick
+```
+
+## Common Workflows
+
+### Generate Training Data
+
+```bash
+# Run a simulation
+./run.sh run castaway_colony_branching
+
+# Export as JSONL training data
+./run.sh export last --format json
+
+# Output: exports/run_<timestamp>.jsonl
+```
+
+### Test Portal Mode (Backward Reasoning)
+
+```bash
+# Full portal mode
+./run.sh run mars_mission_portal
+
+# Quick portal demo (5 timepoints)
+./run.sh run --portal-quick board_meeting
+
+# All portal testing modes
+./run.sh run --portal-all
+```
+
+### Natural Language Simulation
+
+```bash
+./run.sh run --nl "Simulate a startup board meeting about pivoting" \
+  --nl-entities 5 \
+  --nl-timepoints 4
+```
+
+## Troubleshooting
+
+### Environment Check
+
+```bash
+./run.sh doctor
+```
+
+Validates:
+- Python 3.10+ installation
+- .env file and API keys
+- Database paths
+- Key dependencies
+
+### View System Info
+
+```bash
+./run.sh info
+```
+
+Shows:
+- Version info
+- Template count
+- Test file count
+- Database statistics
+
+### Common Issues
+
+**"OPENROUTER_API_KEY not set"**
+- Create `.env` file from `.env.example`
+- Add your OpenRouter API key
+
+**"Run failed with cost exceeded"**
+- Set a higher budget: `--budget 1.00`
+- Use free models: `--free` or `--free-fast`
+- Use faster/cheaper models: `--fast`
+
+**"Database locked"**
+- SQLite doesn't support concurrent writes
+- Run templates sequentially or use `--parallel 1`
+
+## No Cloud Dependencies
+
+Local mode has **zero runtime dependencies** on cloud services:
+
+- No Flash integration
+- No Billing service
+- No Clockchain grounding (planned for M20)
+- No Auth/JWT (local dev uses in-memory API keys)
+- No Pro-Cloud wrapper
+
+The Pro-Cloud layer is a separate private wrapper that adds production concerns (Postgres, Celery, JWT auth, budget enforcement) but does not change the core engine.
+
+## Next Steps
+
+- [Pro-Cloud Deployment](/deployment/pro-cloud) - Production hosted layer with Postgres and Celery
+- [Railway Deployment](/deployment/railway) - Deploy to Railway with internal networking
+- [Docker Setup](/deployment/docker) - Container-based development and deployment

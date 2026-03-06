@@ -1,0 +1,469 @@
+---
+title: Interactive Query Mode
+description: Natural language REPL for exploring simulation results
+---
+
+Interactive mode provides a natural language query interface for exploring entity knowledge states, relationships, and temporal evolution.
+
+## Starting Interactive Mode
+
+```bash
+python cli.py mode=interactive
+```
+
+<CodeGroup>
+```bash Terminal Output
+======================================================================
+TEMPORAL SIMULATION INTERACTIVE QUERY INTERFACE
+======================================================================
+
+You can ask questions about entities in the temporal simulation.
+Examples:
+  'What did George Washington think about becoming president?'
+  'How did Thomas Jefferson feel about the inauguration?'
+  'What actions did Alexander Hamilton take during the ceremony?'
+
+Type 'help' for more examples, 'exit' or 'quit' to leave.
+
+Query: _
+```
+</CodeGroup>
+
+## Query Interface
+
+The interface parses natural language queries and synthesizes contextual responses.
+
+### Query Types
+
+<Tabs>
+  <Tab title="Knowledge Queries">
+    Ask about what entities know:
+    
+    ```
+    "What did George Washington think about becoming president?"
+    "What does Thomas Jefferson know about the Constitution?"
+    "Tell me Hamilton's understanding of the financial system"
+    ```
+    
+    **Returns:**
+    - Entity knowledge state
+    - Confidence scores
+    - Source attributions (exposure events)
+  </Tab>
+  
+  <Tab title="Relationship Queries">
+    Ask about entity connections:
+    
+    ```
+    "How does Jefferson relate to Hamilton?"
+    "What is the relationship between Washington and Adams?"
+    "Who does Madison trust?"
+    ```
+    
+    **Returns:**
+    - Relationship types
+    - Social network structure
+    - Interaction history
+  </Tab>
+  
+  <Tab title="Action Queries">
+    Ask about entity behaviors:
+    
+    ```
+    "What actions did Hamilton take during the ceremony?"
+    "How did Washington respond to the cabinet meeting?"
+    "What did Jefferson do after hearing the proposal?"
+    ```
+    
+    **Returns:**
+    - Recorded actions
+    - Timepoint context
+    - Causal relationships
+  </Tab>
+  
+  <Tab title="Temporal Queries">
+    Ask about changes over time:
+    
+    ```
+    "How did Washington's views evolve over the ceremony?"
+    "What changed in Jefferson's thinking between timepoints?"
+    "Show me Hamilton's knowledge growth"
+    ```
+    
+    **Returns:**
+    - Knowledge deltas
+    - Temporal evolution
+    - Causal chains
+  </Tab>
+</Tabs>
+
+## Query Processing Pipeline
+
+<Steps>
+  <Step title="Parse Query">
+    LLM extracts structured intent:
+    
+    ```python
+    QueryIntent(
+        target_entity="george_washington",
+        information_type="knowledge",
+        context_entities=[],
+        confidence=0.9,
+        reasoning="Query asks about Washington's thoughts"
+    )
+    ```
+  </Step>
+  
+  <Step title="Retrieve Data">
+    Fetch relevant entities, timepoints, and exposure events from database
+  </Step>
+  
+  <Step title="Elevate Resolution (if needed)">
+    Automatically elevates entity resolution to provide detailed responses:
+    
+    - TENSOR_ONLY → SCENE (for basic context)
+    - SCENE → DIALOG (for detailed interactions)
+    - DIALOG → FULL_CONTEXT (for comprehensive history)
+  </Step>
+  
+  <Step title="Synthesize Response">
+    LLM generates natural language response with:
+    - Relevant knowledge items
+    - Source attributions
+    - Confidence indicators
+    - Temporal context
+  </Step>
+</Steps>
+
+## Special Commands
+
+<ParamField path="help" type="command">
+  Show available commands and example queries
+  
+  ```
+  Query: help
+  ```
+</ParamField>
+
+<ParamField path="status" type="command">
+  Display simulation statistics:
+  - Total entities
+  - Total timepoints
+  - Latest timepoint details
+  - Resolution distribution
+  - Cost and token usage
+  
+  ```
+  Query: status
+  ```
+</ParamField>
+
+<ParamField path="models" type="command">
+  Enter model management interface:
+  - List available models
+  - Switch models
+  - Test model connectivity
+  - View model details
+  
+  ```
+  Query: models
+  ```
+</ParamField>
+
+<ParamField path="exit / quit / q" type="command">
+  Exit interactive mode
+  
+  ```
+  Query: exit
+  ```
+</ParamField>
+
+## Example Session
+
+<CodeGroup>
+```bash Full Session
+Query: What did George Washington think about becoming president?
+
+  Parsing query...
+  Intent: knowledge about george_washington (confidence: 0.9)
+  Synthesizing response...
+
+Response:
+George Washington held mixed feelings about assuming the presidency. Based on
+his exposure events from the inauguration ceremony (1789-04-30):
+
+1. **Sense of duty** (confidence: 0.95)
+   Source: Witnessed public expectation at Federal Hall
+   "The weight of responsibility is immense, but the nation requires steady
+   leadership to unite the states."
+
+2. **Personal reluctance** (confidence: 0.92)
+   Source: Private reflections recorded during oath ceremony
+   "I would have preferred to remain at Mount Vernon, but duty calls."
+
+3. **Concerns about precedent** (confidence: 0.89)
+   Source: Cabinet discussions on April 30
+   "Every action I take will set precedent for future presidents. This
+   requires careful consideration."
+
+Cost so far: $0.0045
+
+Query: status
+
+Simulation Status:
+  Entities: 5
+  Timepoints: 5
+  Total cost: $0.0234
+  Tokens used: 1,567
+  Latest timepoint: tp_005
+    Event: Jefferson expresses concerns about centralized power...
+  Resolution distribution:
+    SCENE: 3 entities
+    DIALOG: 2 entities
+
+Query: exit
+
+Goodbye! 👋
+```
+</CodeGroup>
+
+## Lazy Resolution Elevation
+
+Interactive mode automatically elevates entity resolution when needed:
+
+<Tabs>
+  <Tab title="Initial State">
+    **TENSOR_ONLY** - Entity stored with compressed tensors only (~200 tokens)
+    
+    Query arrives requiring detailed knowledge state
+  </Tab>
+  
+  <Tab title="Elevation">
+    **SCENE** - System automatically populates:
+    - Full knowledge state
+    - Personality traits
+    - Scene context
+    - Relationships
+    
+    (~500-1000 tokens)
+  </Tab>
+  
+  <Tab title="Further Detail">
+    **DIALOG** - If query needs dialog or actions:
+    - Dialog generation
+    - Action sequences
+    - Detailed interactions
+    
+    (~2000-4000 tokens)
+  </Tab>
+</Tabs>
+
+This implements **Mechanism 5** (Lazy Resolution) - detail generated only when queried.
+
+## Query Caching
+
+To reduce costs, identical queries are cached for 1 hour:
+
+```python
+CACHE_TTL = timedelta(hours=1)
+
+# Cache key: query + intent
+cache_key = hash(query + target_entity + information_type)
+
+# Check cache before LLM call
+if cached_response := get_cached_response(cache_key):
+    return cached_response
+```
+
+**Cache statistics:**
+```python
+query_interface.get_cache_stats()
+# Returns: {'total_entries': 15, 'valid_entries': 12, 'expired_entries': 3}
+```
+
+## Cost Tracking
+
+Each query displays incremental cost:
+
+```bash
+Cost so far: $0.0045
+```
+
+**Typical query costs:**
+- Simple knowledge query: $0.002-0.005
+- Complex relationship query: $0.005-0.010
+- Temporal evolution query: $0.010-0.020
+- Query with resolution elevation: +$0.010-0.050
+
+## Configuration
+
+Interactive mode uses standard Hydra config:
+
+```yaml conf/config.yaml
+mode: interactive
+
+database:
+  url: sqlite:///timepoint.db
+
+llm:
+  base_url: https://openrouter.ai/api/v1
+  model: meta-llama/llama-3.1-70b-instruct
+  temperature: 0.1  # Low temperature for consistent parsing
+```
+
+### Override Model
+
+```bash
+# Use different model for interactive mode
+python cli.py mode=interactive llm.model=deepseek/deepseek-chat
+
+# Adjust temperature
+python cli.py mode=interactive llm.temperature=0.3
+```
+
+## Advanced Features
+
+### Counterfactual Queries
+
+Supports "what-if" branching scenarios:
+
+```
+"What if Hamilton was absent from the inauguration?"
+"What would happen if Jefferson arrived early?"
+"Imagine if the cabinet meeting was cancelled"
+```
+
+**Query intent fields:**
+```python
+QueryIntent(
+    is_counterfactual=True,
+    intervention_type="entity_removal",
+    intervention_target="alexander_hamilton",
+    intervention_description="Hamilton absent from inauguration"
+)
+```
+
+### Multi-Entity Queries
+
+```
+"How did Washington, Adams, and Jefferson interact during the ceremony?"
+```
+
+**Returns:**
+- Multi-entity relationships
+- Interaction patterns
+- Social dynamics
+
+### Attribution Tracking
+
+All responses include source attribution:
+
+```
+Source: Witnessed public expectation at Federal Hall
+Timestamp: 1789-04-30 12:00:00
+Confidence: 0.95
+Timepoint: tp_001
+```
+
+This ensures **knowledge provenance** - you can trace every fact back to its exposure event.
+
+## Help Text
+
+<CodeGroup>
+```bash Help Output
+Available commands:
+  help, h, ?     Show this help
+  status         Show simulation status and statistics
+  models         Manage LLM models (list, switch, test)
+  exit, quit, q  Leave the interactive interface
+
+Query examples:
+  "What did George Washington think about becoming president?"
+  "How did Thomas Jefferson feel during the inauguration?"
+  "What actions did Alexander Hamilton take after the ceremony?"
+  "Tell me about James Madison's thoughts on the new government"
+  "What was John Adams' reaction to the presidential oath?"
+
+The system will automatically:
+- Parse your natural language query
+- Identify relevant entities and timepoints
+- Elevate resolution if needed for detailed responses
+- Provide attribution showing knowledge sources
+- Track query history for better future responses
+
+Note: The system uses causal temporal simulation where entities evolve
+over timepoints.
+```
+</CodeGroup>
+
+## Status Output
+
+<CodeGroup>
+```bash Status Command
+Query: status
+
+Simulation Status:
+  Entities: 5
+  Timepoints: 5
+  Total cost: $0.0234
+  Tokens used: 1,567
+  Latest timepoint: tp_005
+    Event: Jefferson expresses concerns about centralized power during...
+  Resolution distribution:
+    SCENE: 3 entities
+    DIALOG: 2 entities
+```
+</CodeGroup>
+
+## Error Handling
+
+When queries fail, the system provides helpful feedback:
+
+```bash
+Error processing query: Entity not found: 'benjamin_franklin'
+Available entities: george_washington, john_adams, thomas_jefferson,
+                   alexander_hamilton, james_madison
+
+Try again or type 'help' for guidance.
+```
+
+## Integration with Other Modes
+
+Interactive mode works best after training:
+
+<Steps>
+  <Step title="Train Entities">
+    ```bash
+    python cli.py mode=temporal_train training.context=founding_fathers_1789
+    ```
+  </Step>
+  
+  <Step title="Query Results">
+    ```bash
+    python cli.py mode=interactive
+    ```
+  </Step>
+  
+  <Step title="Evaluate Quality">
+    ```bash
+    python cli.py mode=evaluate
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Training" icon="graduation-cap" href="./train">
+    Populate entities with knowledge
+  </Card>
+  <Card title="Evaluation" icon="chart-bar" href="./evaluate">
+    Validate entity quality
+  </Card>
+  <Card title="Resolution Engine" icon="layer-group" href="../core-concepts/resolution">
+    Learn about lazy resolution
+  </Card>
+  <Card title="CLI Overview" icon="terminal" href="./overview">
+    Back to CLI overview
+  </Card>
+</CardGroup>

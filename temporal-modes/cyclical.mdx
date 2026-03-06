@@ -1,0 +1,576 @@
+---
+title: 'Cyclical Mode'
+description: 'Time loops, repeating patterns, prophecy systems, and causal loops'
+icon: 'arrows-rotate'
+---
+
+## What is Cyclical Mode?
+
+Cyclical mode implements **temporal loops and repeating patterns**: the simulation generates cycles where events echo, escalate, or causally connect across iterations. Think *Groundhog Day*, generational sagas, seasonal migrations, or bootstrap paradoxes.
+
+**The key innovation**: The LLM interprets what "cyclical" means for your scenario—repeating, spiral, causal loop, oscillating, or composite.
+
+<Note>
+  **Core concept**: Cyclical mode doesn't just repeat events. It tracks **prophecy fulfillment**, **causal loop closure**, and **escalation trajectories** across cycles.
+</Note>
+
+## When to Use Cyclical Mode
+
+Use Cyclical mode when:
+
+- **Repeating patterns** - Seasonal cycles, generational succession, recurring conflicts
+- **Time loop narratives** - Groundhog Day scenarios where awareness accumulates
+- **Causal loops** - Later events cause earlier events (bootstrap paradoxes)
+- **Prophecy systems** - Predictions made in cycle N are fulfilled in cycle N+M
+- **Escalating spirals** - Same structure, increasing stakes
+
+<CardGroup cols={2}>
+  <Card title="Perfect for" icon="arrows-rotate">
+    - Wildlife seasonal migration patterns
+    - Generational family sagas
+    - Time loop narratives (Groundhog Day)
+    - Cyclical economic patterns (boom/bust)
+    - Prophecy/fate storylines
+  </Card>
+  <Card title="Not ideal for" icon="xmark">
+    - Linear timelines (use Forward)
+    - Root cause analysis (use Portal)
+    - One-time decisions (use Branching)
+    - Dramatic arcs (use Directorial)
+  </Card>
+</CardGroup>
+
+## How Cyclical Mode Works
+
+<Steps>
+  <Step title="Interpret Cycle Semantics">
+    **The LLM decides what 'cyclical' means** for your scenario:
+    - **Repeating**: Same events with minor mutations (Groundhog Day)
+    - **Spiral**: Same structure, escalating stakes (generational saga)
+    - **Causal loop**: Later cycles cause earlier ones (bootstrap paradox)
+    - **Oscillating**: Alternating between two poles (boom/bust)
+    - **Composite**: LLM-directed combination
+    
+    ```json
+    {
+      "temporal": {
+        "mode": "cyclical",
+        "cycle_length": 3,  // states per cycle
+        "backward_steps": 12  // total states = 4 cycles
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Generate Archetype Cycle">
+    The system generates the **first cycle** as a template:
+    - This becomes the pattern that subsequent cycles vary from
+    - Captures recurring elements (migration route, conflict type, ritual structure)
+  </Step>
+
+  <Step title="Generate Subsequent Cycles">
+    For cycles 2-N, generate variations based on cycle semantics:
+    - **Mutation**: Small random changes accumulate
+    - **Amplification**: Same pattern at higher intensity
+    - **Retroactive**: Later knowledge affects earlier events
+    - **Inversion**: Each cycle inverts the previous
+  </Step>
+
+  <Step title="Resolve Prophecies">
+    At cycle boundaries, generate **prophecies** based on mechanism:
+    - **Deja vu**: Characters feel they've lived this before
+    - **Oracle**: An oracle figure delivers predictions
+    - **Pattern recognition**: Characters notice the pattern
+    - **Fate**: Prophecies emerge from narrative destiny
+    
+    Track fulfillment across cycles.
+  </Step>
+
+  <Step title="Close Causal Loops">
+    For `causal_loop` type, the LLM:
+    1. Detects opportunities where cycle N can cause cycle M
+    2. Rewrites states to explicitly close the loop
+    3. Validates that loop closure is coherent
+  </Step>
+
+  <Step title="Validate Cyclical Coherence">
+    Paths are validated for:
+    - **Cycle length consistency**: Do cycles maintain structure?
+    - **Pattern similarity**: Do recurring elements actually recur?
+    - **Prophecy fulfillment rate**: Are predictions satisfied?
+    - **Escalation trajectory**: Does tension/stakes increase appropriately?
+  </Step>
+</Steps>
+
+## Architecture
+
+Cyclical mode is implemented in `workflows/cyclical_strategy.py`:
+
+```python
+class CyclicalStrategy:
+    """
+    Cyclical temporal simulation strategy with prophecy and loop tracking.
+    
+    Process:
+    1. Interpret cycle semantics (LLM decides what 'cyclical' means)
+    2. Generate origin state
+    3. Generate archetype cycle (the template cycle)
+    4. Generate subsequent cycles with escalation + variation
+    5. Resolve prophecies across cycles
+    6. Resolve causal loops
+    7. Validate cyclical coherence
+    8. Rank paths and populate metadata
+    """
+    
+    def run(self) -> list[CyclicalPath]:
+        """
+        Execute cyclical temporal simulation.
+        
+        Returns:
+            List of CyclicalPath objects with cycle metadata
+        """
+```
+
+### Key Data Structures
+
+```python
+@dataclass
+class CyclicalState:
+    """A state in the cyclical simulation"""
+    year: int
+    month: int
+    description: str
+    entities: list[Entity]
+    world_state: dict[str, Any]
+    
+    # Cycle tracking
+    cycle_index: int = 0
+    position_in_cycle: int = 0
+    cycle_type: str = ""  # LLM-determined
+    
+    # Pattern tracking
+    pattern_signature: str = ""
+    variation_from_archetype: float = 0.0
+    escalation_level: float = 0.0
+    
+    # Prophecy/echo
+    prophecy: str = ""
+    prophecy_source_cycle: int = -1
+    fulfilled_prophecies: list[str] = field(default_factory=list)
+    echo_of: str = ""  # Reference to archetype
+    
+    # Causal loops
+    causal_loop_tag: str = ""
+    loop_contribution: str = ""
+
+@dataclass
+class CyclicalPath:
+    """Complete cyclical path through multiple cycles"""
+    path_id: str
+    states: list[CyclicalState]
+    coherence_score: float
+    cycle_type: str = ""
+    cycle_count: int = 0
+    cycle_boundaries: list[int] = field(default_factory=list)
+    prophecy_fulfillment_rate: float = 0.0
+    escalation_trajectory: list[float] = field(default_factory=list)
+    causal_loops_closed: int = 0
+```
+
+## Configuration
+
+```json
+{
+  "temporal": {
+    "mode": "cyclical",
+    "cycle_length": 3,  // states per cycle
+    "backward_steps": 12,  // total states (4 cycles of 3 states)
+    "path_count": 3,  // number of cyclical paths
+    "prophecy_accuracy": 0.7,  // threshold for fulfillment
+    "fidelity_planning_mode": "hybrid",
+    "token_budget": 100000.0
+  }
+}
+```
+
+<Accordion title="Cyclical Configuration Parameters">
+  | Parameter | Type | Default | Description |
+  |-----------|------|---------|-------------|
+  | `mode` | string | required | Must be `"cyclical"` |
+  | `cycle_length` | int | 4 | Number of states per cycle |
+  | `backward_steps` | int | 12 | Total states (divided by cycle_length = loop_count) |
+  | `path_count` | int | 3 | Number of cyclical paths to generate |
+  | `prophecy_accuracy` | float | 0.5 | Confidence threshold for prophecy fulfillment (0.0-1.0) |
+  | `coherence_threshold` | float | 0.7 | Minimum cyclical coherence score |
+</Accordion>
+
+## Template Example: Elk Migration
+
+From `persona/agent4_elk_migration.json`:
+
+```json
+{
+  "scenario_description": "CYCLICAL seasonal elk migration over two years. Four entities: herd matriarch, wolf pack, district ranger, university biologist. Track spring migration, summer range, fall rut, winter mortality. Climate pressure manifests as reduced snowpack affecting forage, calf survival, migration timing.",
+  "temporal": {
+    "mode": "cyclical",
+    "cycle_length": 3,  // spring, summer, fall/winter
+    "backward_steps": 15,  // 5 cycles
+    "path_count": 5,
+    "prophecy_accuracy": 0.7
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M7_causal_chains",
+      "M8_embodied_states",
+      "M11_dialog_synthesis",
+      "M13_relationship_tracking",
+      "M14_circadian_patterns",
+      "M16_animistic_entities"
+    ],
+    "entity_roster": {
+      "herd_matriarch": {
+        "type": "animal",
+        "role": "Lead cow embodying herd migration memory",
+        "initial_knowledge": ["traditional_migration_route", "winter_range_boundaries"]
+      },
+      "wolf_pack_lamar": {
+        "type": "animal",
+        "role": "Predation pressure shifts seasonally"
+      },
+      "ranger_thompson": {
+        "type": "human",
+        "role": "Manages hunting permits and rancher conflict"
+      },
+      "dr_wilson_biologist": {
+        "type": "human",
+        "role": "GPS collar data and population models"
+      }
+    },
+    "cyclical_structure": {
+      "timepoints": [
+        {"tp": 1, "season": "Spring Year 1", "events": "Migration north, calving"},
+        {"tp": 2, "season": "Summer Year 1", "events": "Summer range, wolf predation"},
+        {"tp": 3, "season": "Fall/Winter Year 1", "events": "Rut, hunting, winter mortality"},
+        {"tp": 4, "season": "Spring Year 2", "events": "Migration under drought"},
+        {"tp": 5, "season": "Summer Year 2", "events": "Compressed range, human conflict"},
+        {"tp": 6, "season": "Fall/Winter Year 2", "events": "Reduced calf recruitment"}
+      ]
+    },
+    "quantitative_tracking": {
+      "herd_population": {"initial_cows": 320, "initial_calves": 95},
+      "vegetation_biomass": {"unit": "kg/ha", "spring_peak": 2400},
+      "predation_rate": {"unit": "kills/week", "winter": 2.1, "summer": 0.8}
+    }
+  }
+}
+```
+
+**Cost**: $0.10 | **Duration**: ~4min | **Cycles**: 2 annual cycles
+
+## Cycle Semantics
+
+The LLM interprets what "cyclical" means via `_interpret_cycle_semantics()`:
+
+```python
+class CycleSemantics(BaseModel):
+    """LLM-determined interpretation of cyclical pattern"""
+    cycle_type: str  # repeating, spiral, causal_loop, oscillating, composite
+    variation_mode: str  # mutation, amplification, retroactive, inversion, mixed
+    escalation_rule: str  # How stakes change per cycle
+    prophecy_mechanism: str  # deja_vu, oracle, pattern_recognition, fate, none
+    loop_structure: str  # Description of causal loop
+    key_recurring_elements: list[str]  # What repeats each cycle
+    variation_seeds: list[str]  # What changes between cycles
+```
+
+**LLM prompt**:
+```
+Determine:
+1. cycle_type: What kind of cycle fits this scenario?
+   - "repeating": Same events replay with minor changes (Groundhog Day)
+   - "spiral": Same structure but escalating stakes (generational saga)
+   - "causal_loop": Later cycles cause earlier ones (bootstrap paradox)
+   - "oscillating": Alternating between two poles (boom/bust)
+   - "composite": Combination of above
+
+2. variation_mode: How do cycles differ?
+   - "mutation": Small random changes accumulate
+   - "amplification": Same pattern at higher intensity
+   - "retroactive": Later knowledge affects earlier events
+   - "inversion": Each cycle inverts the previous
+```
+
+## Prophecy System
+
+Cyclical mode includes a **three-method prophecy system**:
+
+### 1. Generate Prophecy
+
+```python
+def _generate_prophecy(
+    self,
+    state: CyclicalState,
+    cycle_idx: int
+) -> ProphecySchema | None:
+    """
+    Generate a prophecy at cycle boundaries.
+    
+    Prophecy style determined by prophecy_mechanism:
+    - deja_vu: Characters sense they've lived this before
+    - oracle: An oracle delivers cryptic predictions
+    - pattern_recognition: Characters notice the pattern
+    - fate: Narrative destiny suggests inevitability
+    """
+```
+
+**Example output**:
+```json
+{
+  "prophecy_text": "The herd will return to the northern range when snow falls early, but many calves will not survive the winter.",
+  "prophecy_type": "warning",
+  "target_cycle": 2,
+  "fulfillment_condition": "Calf survival rate drops below 50% in cycle 2 winter"
+}
+```
+
+### 2. Check Fulfillment
+
+```python
+def _check_prophecy_fulfillment(
+    self,
+    state: CyclicalState,
+    prophecy_record: dict
+) -> bool:
+    """
+    LLM rates confidence of prophecy fulfillment.
+    
+    Returns True if:
+    - Fulfillment condition is met
+    - Confidence >= prophecy_accuracy threshold
+    """
+```
+
+### 3. Resolve Across Path
+
+```python
+def _resolve_prophecies(self, path: CyclicalPath):
+    """
+    Walk path states, compute prophecy_fulfillment_rate.
+    """
+    fulfilled_count = sum(1 for p in path_prophecies if p["fulfilled"])
+    path.prophecy_fulfillment_rate = fulfilled_count / len(path_prophecies)
+```
+
+## Causal Loop System
+
+For `causal_loop` cycle types, three methods manage loop closure:
+
+### 1. Detect Opportunity
+
+```python
+def _detect_causal_loop_opportunity(
+    self,
+    state: CyclicalState,
+    cycle_idx: int
+) -> dict[str, Any] | None:
+    """
+    LLM detects if state could close a causal loop.
+    
+    Checks open loops for potential closure.
+    Returns loop metadata if closure is possible.
+    """
+```
+
+### 2. Enforce Loop Closure
+
+```python
+def _enforce_causal_loop(
+    self,
+    state: CyclicalState,
+    opportunity: dict[str, Any]
+) -> CyclicalState:
+    """
+    LLM rewrites state to explicitly close the loop.
+    
+    Ensures:
+    1. Loop closure is explicit in description
+    2. Connection to earlier cycle is clear
+    3. Rewrite maintains narrative coherence
+    """
+```
+
+### 3. Resolve Loops
+
+```python
+def _resolve_causal_loops(self, path: CyclicalPath):
+    """
+    Verify all open loops are closed.
+    Count closed loops in path metadata.
+    """
+```
+
+## Validation
+
+Cyclical paths are validated with **hybrid scoring**:
+
+```python
+def _validate_cyclical_coherence(self, paths: list[CyclicalPath]) -> list[CyclicalPath]:
+    """
+    Composite score:
+    - Cycle length consistency (30%)
+    - Pattern similarity across cycles (40%)
+    - Prophecy fulfillment rate (30%)
+    
+    For high-scoring paths, LLM validates:
+    - Does the cycle type manifest correctly?
+    - Do recurring elements actually recur?
+    - Are prophecies appropriately fulfilled?
+    """
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Set Cycle Length Appropriately">
+    Match cycle length to your narrative rhythm:
+    - **3 states**: Seasonal patterns (spring, summer, fall/winter)
+    - **4 states**: Quarterly business cycles
+    - **6-8 states**: Longer narrative arcs
+    
+    Total states = `cycle_length * loop_count`
+  </Accordion>
+
+  <Accordion title="2. Choose Prophecy Mechanism">
+    Prophecy mechanism affects how predictions manifest:
+    - **deja_vu**: Characters sense familiarity (time loop narratives)
+    - **oracle**: Explicit predictions from authoritative source
+    - **pattern_recognition**: Characters notice the pattern themselves
+    - **fate**: Narrative destiny (tragedy, inevitability)
+    - **none**: No prophecy system
+  </Accordion>
+
+  <Accordion title="3. Define Recurring Elements">
+    The LLM extracts recurring elements, but you can seed them:
+    ```json
+    {
+      "metadata": {
+        "key_recurring_elements": [
+          "migration_route_decision",
+          "predator_encounter",
+          "resource_depletion",
+          "human_wildlife_conflict"
+        ]
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="4. Track Quantitative State for Escalation">
+    For spiral/escalating cycles, define quantitative metrics:
+    ```json
+    {
+      "metadata": {
+        "quantitative_tracking": {
+          "herd_population": {"initial": 555, "target_decline": 0.15},
+          "calf_survival_rate": {"year1": 0.72, "year2": 0.48}
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="5. Use Animistic Entities (M16)">
+    Cyclical mode pairs beautifully with animistic entities:
+    - **Herd matriarch** embodies collective migration memory
+    - **Biosphere** as an entity with seasonal rhythms
+    - **Time itself** as a character in causal loop stories
+  </Accordion>
+</AccordionGroup>
+
+## Cost Estimates
+
+<CardGroup cols={3}>
+  <Card title="Quick" icon="bolt">
+    **$0.08 - $0.12**
+    
+    3-4 entities
+    
+    2 cycles
+    
+    3-5 min
+  </Card>
+  
+  <Card title="Standard" icon="clock">
+    **$0.15 - $0.30**
+    
+    4-6 entities
+    
+    3-4 cycles
+    
+    6-10 min
+  </Card>
+  
+  <Card title="Comprehensive" icon="chart-line">
+    **$0.30 - $0.60**
+    
+    6-8 entities
+    
+    5-6 cycles
+    
+    12-18 min
+  </Card>
+</CardGroup>
+
+## Running Cyclical Mode
+
+```bash
+# Run elk migration cyclical template
+./run.sh run agent4_elk_migration
+
+# Quick mode
+./run.sh run agent4_elk_migration --quick
+```
+
+## Output Structure
+
+Cyclical paths include rich metadata:
+
+```json
+{
+  "path_id": "cyclical_path_a8f9",
+  "cycle_type": "spiral",
+  "cycle_count": 4,
+  "cycle_boundaries": [0, 3, 6, 9],
+  "prophecy_fulfillment_rate": 0.75,
+  "escalation_trajectory": [0.2, 0.4, 0.65, 0.85],
+  "causal_loops_closed": 2,
+  "coherence_score": 0.83,
+  "states": [
+    {
+      "cycle_index": 0,
+      "position_in_cycle": 0,
+      "escalation_level": 0.2,
+      "prophecy": "The herd will return when snow falls early...",
+      "fulfilled_prophecies": [],
+      "echo_of": ""
+    }
+  ]
+}
+```
+
+## Related Mechanisms
+
+Cyclical mode commonly pairs with:
+
+- **M7 (Causal Chains)** - Validate cycle-to-cycle causality
+- **M8 (Embodied States)** - Physical degradation across cycles
+- **M11 (Dialog Synthesis)** - Conversations reveal pattern awareness
+- **M13 (Relationship Evolution)** - Trust/tension evolves cyclically
+- **M14 (Circadian Patterns)** - Seasonal/diurnal rhythms
+- **M16 (Animistic Entities)** - Non-human cycle participants
+
+<Card title="Next Steps" icon="compass">
+  - [Directorial Mode](/temporal-modes/directorial) - Narrative-driven arcs
+  - [Portal Mode](/temporal-modes/portal) - Backward reasoning
+  - [Template Catalog](/templates/catalog) - Browse all templates
+</Card>

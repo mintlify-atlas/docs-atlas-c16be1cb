@@ -1,0 +1,665 @@
+---
+title: 'Validation'
+description: 'Validator classes, constraint enforcement mechanisms, and error detection'
+---
+
+## Overview
+
+Timepoint Pro uses a **plugin-based validation framework** to enforce constraints at multiple levels:
+
+- **Temporal causality** (M1.2) - Entities can't know things before they learn them
+- **Information conservation** - Knowledge requires exposure events (M3)
+- **Energy budgets** - Interaction costs with circadian adjustments (M14)
+- **Biological constraints** (M4) - Age-dependent capabilities, resource limits
+- **Dialog realism** - Physical/emotional states affect conversation ability
+- **Relationship consistency** - Dialog tone matches trust levels
+- **Environmental constraints** (M16) - Animistic entities impose limits
+
+Validators run automatically during simulation and can be invoked manually for debugging.
+
+## Validator Base Class
+
+All validators extend the plugin-based `Validator` class:
+
+```python
+from validation import Validator
+
+class Validator(ABC):
+    """Base validator with plugin registry"""
+    
+    _validators = {}
+    
+    @classmethod
+    def register(cls, name: str, severity: str = "ERROR"):
+        def decorator(func: Callable):
+            cls._validators[name] = {"func": func, "severity": severity}
+            return func
+        return decorator
+    
+    @classmethod
+    def validate_all(cls, entity: Entity, context: dict) -> list[dict]:
+        violations = []
+        for name, validator in cls._validators.items():
+            result = validator["func"](entity, context)
+            if not result["valid"]:
+                violations.append({
+                    "validator": name,
+                    "severity": validator["severity"],
+                    "message": result["message"]
+                })
+        return violations
+```
+
+## Core Validators
+
+### Information Conservation
+
+**Mechanism:** M3 (Exposure Events)  
+**Severity:** ERROR
+
+Validates that entity knowledge is a subset of their exposure history:
+
+```python
+@Validator.register("information_conservation", "ERROR")
+def validate_information_conservation(entity: Entity, context: dict, store=None) -> dict:
+    """Validate knowledge ⊆ exposure history"""
+    
+    # Query exposure events from database
+    exposure_events = store.get_exposure_events(entity.entity_id)
+    exposure = set(event.information for event in exposure_events)
+    
+    # Get entity's knowledge state
+    knowledge = set(entity.entity_metadata.get("knowledge_state", []))
+    
+    # Check for anachronisms
+    unknown = knowledge - exposure
+    if unknown:
+        return {
+            "valid": False,
+            "message": f"Entity knows about {unknown} without exposure"
+        }
+    
+    return {"valid": True, "message": "Information conservation satisfied"}
+```
+
+**Example violation:**
+```json
+{
+  "validator": "information_conservation",
+  "severity": "ERROR",
+  "message": "Entity Webb knows about {'O2 fault reading'} without exposure"
+}
+```
+
+**Fix:** Add exposure event:
+```python
+from workflows import create_exposure_event
+
+create_exposure_event(
+    entity_id="Webb",
+    information="O2 fault reading",
+    source="Chen",
+    event_type="told",
+    timestamp=timepoint.timestamp,
+    confidence=0.9,
+    store=store
+)
+```
+
+### Temporal Causality
+
+**Mechanism:** M1.2 (Fourth Wall Knowledge Filtering)  
+**Severity:** ERROR
+
+Validates that entity knowledge follows causal temporal constraints:
+
+```python
+@Validator.register("temporal_causality", "ERROR")
+def validate_temporal_causality(entity: Entity, context: dict) -> dict:
+    """Validate that entity knowledge follows causal temporal constraints"""
+    
+    store = context.get("store")
+    timepoint_id = context.get("timepoint_id")
+    
+    knowledge_state = entity.entity_metadata.get("knowledge_state", [])
+    invalid_items = []
+    
+    for knowledge_item in knowledge_state:
+        # Check when entity learned this knowledge
+        validation = validate_temporal_reference(
+            entity.entity_id, knowledge_item, timepoint_id, store
+        )
+        if not validation["valid"]:
+            invalid_items.append(knowledge_item)
+    
+    if invalid_items:
+        return {
+            "valid": False,
+            "message": f"Entity has knowledge {invalid_items} that violates temporal causality"
+        }
+    
+    return {"valid": True, "message": "Temporal causality satisfied"}
+```
+
+**Example violation (FORWARD mode):**
+```json
+{
+  "validator": "temporal_causality",
+  "severity": "ERROR",
+  "message": "Entity Webb has knowledge ['Mission outcome'] that violates temporal causality"
+}
+```
+
+In FORWARD mode, entities can't know about future events. This validator ensures strict forward causality.
+
+**Portal mode exception:**
+
+In PORTAL mode, backward-inferred knowledge is allowed:
+```python
+if mode == "portal" and knowledge_item.inferred_backward:
+    # Allow knowledge inferred from future state
+    continue
+```
+
+### Energy Budget
+
+**Mechanism:** M14 (Circadian Patterns)  
+**Severity:** WARNING
+
+Validates interaction costs ≤ capacity with circadian adjustments:
+
+```python
+@Validator.register("energy_budget", "WARNING")
+def validate_energy_budget(entity: Entity, context: dict) -> dict:
+    """Validate interaction costs ≤ capacity with circadian adjustments"""
+    
+    budget = entity.entity_metadata.get("energy_budget", 100)
+    current_knowledge = set(entity.entity_metadata.get("knowledge_state", []))
+    previous_knowledge = set(context.get("previous_knowledge", []))
+    
+    new_knowledge_count = len(current_knowledge - previous_knowledge)
+    base_expenditure = new_knowledge_count * 5
+    
+    # Apply circadian adjustments
+    timepoint = context.get("timepoint")
+    circadian_config = context.get("circadian_config", {})
+    
+    if timepoint and circadian_config:
+        activity_type = context.get("activity_type", "work")
+        expenditure = compute_energy_cost_with_circadian(
+            activity_type, timepoint.timestamp.hour, base_expenditure, circadian_config
+        )
+    else:
+        expenditure = base_expenditure
+    
+    if expenditure > budget * 1.2:  # Allow 20% temporary excess
+        return {
+            "valid": False,
+            "message": f"Energy expenditure {expenditure:.1f} exceeds budget {budget}"
+        }
+    
+    return {"valid": True, "message": "Energy budget satisfied"}
+```
+
+**Circadian penalty example:**
+```python
+# Nighttime work (22:00-06:00)
+hour = 23
+night_penalty = 1.5  # 50% more draining
+fatigue_factor = 1.3  # 17 hours awake
+
+total_cost = base_cost * night_penalty * fatigue_factor
+# 50 * 1.5 * 1.3 = 97.5
+```
+
+### Biological Constraints
+
+**Mechanism:** M4 (Constraint Enforcement)  
+**Severity:** ERROR
+
+Validates age-dependent capabilities and biological plausibility:
+
+```python
+@Validator.register("biological_constraints", "ERROR")
+@track_mechanism("M4", "constraint_enforcement")
+def validate_biological_constraints(entity: Entity, context: dict) -> dict:
+    """Validate age-dependent capabilities and biological plausibility"""
+    
+    age = entity.entity_metadata.get("age", 0)
+    action = context.get("action", "")
+    violations = []
+    
+    # Age-based constraint checks
+    if age > 100 and "physical_labor" in action:
+        violations.append(f"age {age} incompatible with physical labor")
+    
+    if (age < 18 or age > 50) and "childbirth" in action:
+        violations.append(f"age {age} outside plausible childbirth range (18-50)")
+    
+    if age < 5 and any(a in action for a in ["negotiate", "strategic_planning"]):
+        violations.append(f"age {age} incompatible with {action}")
+    
+    if age > 80 and any(a in action for a in ["sprint", "heavy_lifting", "combat"]):
+        violations.append(f"age {age} incompatible with {action}")
+    
+    if violations:
+        return {
+            "valid": False,
+            "message": f"Constraint violations: {'; '.join(violations)}"
+        }
+    
+    return {"valid": True, "message": "Biological constraints satisfied"}
+```
+
+**Example violation:**
+```json
+{
+  "validator": "biological_constraints",
+  "severity": "ERROR",
+  "message": "Constraint violations: age 85 incompatible with sprint"
+}
+```
+
+### Behavioral Inertia
+
+**Mechanism:** M1 (Heterogeneous Fidelity)  
+**Severity:** WARNING
+
+Validates that personality drift is gradual:
+
+```python
+@Validator.register("behavioral_inertia", "WARNING")
+def validate_behavioral_inertia(entity: Entity, context: dict) -> dict:
+    """Validate personality drift is gradual"""
+    
+    if "previous_personality" not in context:
+        return {"valid": True, "message": "No previous state to compare"}
+    
+    current = np.array(entity.entity_metadata.get("personality_traits", []))
+    previous = np.array(context["previous_personality"])
+    
+    if len(current) == 0 or len(previous) == 0:
+        return {"valid": True, "message": "Personality data not available"}
+    
+    drift = np.linalg.norm(current - previous)
+    if drift > 1.0:  # Threshold for significant personality change
+        return {
+            "valid": False,
+            "message": f"Personality drift {drift:.2f} exceeds threshold 1.0"
+        }
+    
+    return {"valid": True, "message": "Behavioral inertia satisfied"}
+```
+
+## Dialog Validators
+
+### Dialog Realism
+
+**Mechanism:** M8 (Embodied States), M11 (Dialog Synthesis)  
+**Severity:** WARNING
+
+Checks if dialog respects physical/emotional constraints:
+
+```python
+@Validator.register("dialog_realism", severity="WARNING")
+def validate_dialog_realism(entity: Entity, context: dict = None) -> dict:
+    """Check if dialog respects physical/emotional constraints"""
+    
+    dialog_data = entity.entity_metadata.get("dialog_data", {})
+    turns = json.loads(dialog_data.get("turns", "[]"))
+    entities = context.get("entities", [])
+    
+    validation_issues = []
+    
+    for i, turn in enumerate(turns):
+        speaker_id = turn.get("speaker")
+        content = turn.get("content", "")
+        
+        speaker = next((e for e in entities if e.entity_id == speaker_id), None)
+        if not speaker:
+            continue
+        
+        # Apply body-mind coupling
+        physical = speaker.physical_tensor
+        cognitive = speaker.cognitive_tensor
+        coupled_cognitive = couple_pain_to_cognition(physical, cognitive)
+        coupled_cognitive = couple_illness_to_cognition(physical, coupled_cognitive)
+        
+        # Check turn length vs. energy
+        content_length = len(content)
+        if coupled_cognitive.energy_budget < 30 and content_length > 200:
+            validation_issues.append(
+                f"{speaker_id} too low energy ({coupled_cognitive.energy_budget:.1f}) "
+                f"for long response ({content_length} chars)"
+            )
+        
+        # Check tone vs. emotional state
+        emotional_tone = turn.get("emotional_tone", "").lower()
+        valence = coupled_cognitive.emotional_valence
+        
+        if valence < -0.5 and not any(neg in emotional_tone for neg in ["sad", "angry", "frustrated"]):
+            validation_issues.append(
+                f"{speaker_id} should have negative tone given emotional valence {valence:.2f}"
+            )
+    
+    if validation_issues:
+        return {
+            "valid": False,
+            "message": f"Dialog realism issues: {'; '.join(validation_issues)}"
+        }
+    
+    return {"valid": True, "message": "Dialog respects physical/emotional constraints"}
+```
+
+**Example violation:**
+```json
+{
+  "validator": "dialog_realism",
+  "severity": "WARNING",
+  "message": "Dialog realism issues: Webb too low energy (22.5) for long response (342 chars)"
+}
+```
+
+### Dialog Knowledge Consistency
+
+**Mechanism:** M3 (Exposure Events), M11 (Dialog Synthesis)  
+**Severity:** ERROR
+
+Checks if dialog speakers only reference knowledge they actually have:
+
+```python
+@Validator.register("dialog_knowledge_consistency", severity="ERROR")
+def validate_dialog_knowledge_consistency(entity: Entity, context: dict = None) -> dict:
+    """Check if dialog speakers only reference knowledge they actually have"""
+    
+    dialog_data = entity.entity_metadata.get("dialog_data", {})
+    turns = json.loads(dialog_data.get("turns", "[]"))
+    entities = context.get("entities", [])
+    
+    knowledge_violations = []
+    
+    for turn in turns:
+        speaker_id = turn.get("speaker")
+        knowledge_refs = turn.get("knowledge_references", [])
+        
+        speaker = next((e for e in entities if e.entity_id == speaker_id), None)
+        if not speaker:
+            continue
+        
+        speaker_knowledge = set(speaker.entity_metadata.get("knowledge_state", []))
+        
+        for ref in knowledge_refs:
+            if ref not in speaker_knowledge:
+                knowledge_violations.append(f"{speaker_id} references unknown knowledge: '{ref}'")
+    
+    if knowledge_violations:
+        return {
+            "valid": False,
+            "message": f"Knowledge consistency violations: {'; '.join(knowledge_violations)}"
+        }
+    
+    return {"valid": True, "message": "Dialog respects knowledge constraints"}
+```
+
+**Example violation:**
+```json
+{
+  "validator": "dialog_knowledge_consistency",
+  "severity": "ERROR",
+  "message": "Knowledge consistency violations: Webb references unknown knowledge: 'Sensor calibration date'"
+}
+```
+
+**Fix:** Add exposure event before dialog:
+```python
+create_exposure_event(
+    entity_id="Webb",
+    information="Sensor calibration date",
+    source="Chen",
+    event_type="told",
+    timestamp=timepoint.timestamp,
+    store=store
+)
+```
+
+## Mechanism-Specific Validators
+
+### Circadian Plausibility (M14)
+
+**Severity:** WARNING
+
+Checks if activity is plausible at the given time of day:
+
+```python
+@Validator.register("circadian_plausibility", severity="WARNING")
+def validate_circadian_activity(entity: Entity, context: dict = None) -> dict:
+    """Check if activity is plausible at the given time of day"""
+    
+    activity = context.get("activity")
+    timepoint = context.get("timepoint")
+    circadian_config = context.get("circadian_config", {})
+    
+    hour = timepoint.timestamp.hour
+    probability = get_activity_probability(hour, activity, circadian_config)
+    
+    if probability < 0.05:  # Critical threshold
+        return {
+            "valid": False,
+            "message": f"Activity '{activity}' at {hour:02d}:00 is highly implausible (probability: {probability:.3f})"
+        }
+    
+    return {"valid": True, "message": f"Activity '{activity}' at {hour:02d}:00 is plausible"}
+```
+
+**Example:**
+```python
+# Validate "board_meeting" at 3 AM
+result = validate_circadian_activity(
+    entity,
+    context={
+        "activity": "board_meeting",
+        "timepoint": Timepoint(timestamp=datetime(2026, 3, 6, 3, 0)),
+        "circadian_config": {...}
+    }
+)
+# Result: {"valid": False, "message": "Activity 'board_meeting' at 03:00 is highly implausible (probability: 0.02)"}
+```
+
+### Prospection Consistency (M15)
+
+**Severity:** WARNING
+
+Validates that prospective expectations are consistent and realistic:
+
+```python
+@Validator.register("prospection_consistency", severity="WARNING")
+def validate_prospection_consistency(entity: Entity, context: dict = None) -> dict:
+    """Validate that prospective expectations are consistent and realistic"""
+    
+    prospective_state = context.get("prospective_state")
+    expectations = prospective_state.expectations
+    
+    issues = []
+    total_probability = 0
+    
+    for exp in expectations:
+        total_probability += exp.subjective_probability
+        
+        # Flag unrealistic probabilities
+        if exp.subjective_probability > 0.95:
+            issues.append(f"Expectation '{exp.predicted_event}' has very high probability ({exp.subjective_probability:.3f})")
+        
+        # Check confidence vs probability alignment
+        if exp.confidence > 0.8 and exp.subjective_probability < 0.2:
+            issues.append(f"High confidence ({exp.confidence:.2f}) but low probability ({exp.subjective_probability:.3f})")
+    
+    # Check total probability isn't unrealistic
+    if total_probability > 1.5:
+        issues.append(f"Total expectation probabilities ({total_probability:.2f}) suggest unrealistic optimism")
+    
+    if issues:
+        return {"valid": False, "message": f"Prospection consistency issues: {'; '.join(issues)}"}
+    
+    return {"valid": True, "message": "Prospective expectations appear consistent"}
+```
+
+### Environmental Constraints (M16)
+
+**Severity:** ERROR
+
+Validates that actions respect constraints imposed by animistic entities:
+
+```python
+@Validator.register("environmental_constraints", severity="ERROR")
+def validate_environmental_constraints(entity: Entity, context: dict = None) -> dict:
+    """Validate that actions respect constraints imposed by animistic entities"""
+    
+    action = context.get("action")
+    environment_entities = context.get("environment_entities", [])
+    issues = []
+    
+    for env_entity in environment_entities:
+        if env_entity.entity_type == "building":
+            building = BuildingEntity(**env_entity.entity_metadata)
+            participant_count = action.get("participant_count", 0)
+            
+            if participant_count > building.capacity:
+                issues.append(
+                    f"Building {env_entity.entity_id} capacity {building.capacity} "
+                    f"exceeded by {participant_count} participants"
+                )
+            
+            if building.structural_integrity < 0.5:
+                issues.append(
+                    f"Building {env_entity.entity_id} structural integrity too low "
+                    f"({building.structural_integrity:.2f}) for use"
+                )
+    
+    if issues:
+        return {"valid": False, "message": f"Environmental constraint violations: {'; '.join(issues)}"}
+    
+    return {"valid": True, "message": "All environmental constraints satisfied"}
+```
+
+## Error Severity Levels
+
+### ERROR (Fatal)
+
+Blocks simulation from continuing:
+- Information conservation violations
+- Temporal causality violations
+- Biological constraint violations
+- Dialog knowledge consistency violations
+
+**Behavior:** Simulation aborts, requires fix
+
+### WARNING (Non-Fatal)
+
+Logs warning but allows simulation to continue:
+- Energy budget exceedances (within 20% tolerance)
+- Behavioral inertia drift
+- Dialog realism issues
+- Circadian plausibility concerns
+
+**Behavior:** Logged, simulation continues
+
+### INFO (Informational)
+
+Informational only, no action taken:
+- Timeline divergence analysis
+- Adaptive entity behavior observations
+
+**Behavior:** Logged for analysis
+
+## Using Validators Programmatically
+
+### Validate Single Entity
+
+```python
+from validation import Validator
+
+validator = Validator()
+result = validator.validate_entity(
+    entity=entity,
+    context={
+        "timepoint_id": "T2",
+        "store": store,
+        "previous_knowledge": previous_state["knowledge_state"]
+    }
+)
+
+if not result["valid"]:
+    for violation in result["violations"]:
+        print(f"[{violation['severity']}] {violation['validator']}: {violation['message']}")
+```
+
+### Validate All Entities
+
+```python
+for entity in entities:
+    result = validator.validate_entity(entity, context)
+    if not result["valid"]:
+        print(f"Entity {entity.entity_id} has {len(result['violations'])} violations")
+```
+
+### Run Specific Validator
+
+```python
+from validation import validate_information_conservation
+
+result = validate_information_conservation(
+    entity=entity,
+    context={"store": store}
+)
+
+if not result["valid"]:
+    print(f"Violation: {result['message']}")
+```
+
+## Best Practices
+
+### Enable Validation in Development
+
+Run with validation enabled:
+```bash
+./run.sh run --validate board_meeting
+```
+
+Disable for production:
+```bash
+./run.sh run --no-validate board_meeting
+```
+
+### Log Violations
+
+Validation results are logged to `logs/validation.log`:
+
+```
+2026-03-06 12:34:56 [ERROR] information_conservation: Entity Webb knows about {'O2 fault'} without exposure
+2026-03-06 12:35:12 [WARNING] energy_budget: Energy expenditure 127.3 exceeds budget 100
+```
+
+### Fix Common Violations
+
+**Information conservation:**
+- Add exposure events before knowledge references
+- Use M3 knowledge extraction to track provenance
+
+**Temporal causality:**
+- Check timepoint ordering
+- In Portal mode, verify backward inference logic
+
+**Energy budget:**
+- Reduce dialog turn count
+- Lower interaction complexity
+- Account for circadian penalties
+
+**Dialog realism:**
+- Adjust energy budgets before long conversations
+- Sync emotional state before dialog generation
+
+## Next Steps
+
+- Learn about [Dialog Synthesis](/guides/dialog-synthesis) to understand context requirements
+- Read [Templates](/guides/templates) to configure validation settings
+- Explore mechanism-specific validators in [Mechanisms](/mechanisms)

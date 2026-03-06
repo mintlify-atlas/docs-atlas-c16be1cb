@@ -1,0 +1,448 @@
+---
+title: 'Castaway Colony'
+description: 'Full-mechanism showcase: crash-landed crew on alien planet with branching survival strategies'
+icon: 'planet-ringed'
+---
+
+# Castaway Colony: Full-Mechanism Showcase
+
+The **Castaway Colony** template is the most comprehensive demonstration of Timepoint Pro's capabilities—exercising all 19 mechanisms in a single scenario. A research vessel crashes on an alien planet, and the crew must choose between three survival strategies, each with different risk profiles and resource tradeoffs.
+
+<Info>
+**Template**: `castaway_colony_branching` | **Mode**: BRANCHING | **Cost**: ~$0.35-$1.00 | **Mechanisms**: All 19
+</Info>
+
+## The Scenario
+
+The research vessel **Meridian** crash-lands on Kepler-442b after a navigation system failure during orbital insertion. Six crew members survive with partial supplies, a damaged ship, and no way to contact Earth for 14 months.
+
+### Survival Context
+
+- **Alien biosphere**: Bioluminescent flora responds to electromagnetic signatures
+- **Migratory fauna**: Movement patterns predict violent weather cycles that follow no Earth logic
+- **Damaged ship**: Life support draining, hull integrity degrading
+- **Limited supplies**: O2 reserves (336 hours), food rations (180 kg), water purification capacity declining
+- **Timeline**: 21 days tracked across 10 timepoints
+
+<Warning>
+**Knowledge provenance is survival**: Who discovered the water contamination? Who noticed the fauna migration pattern predicts storms? Who found the cave system?
+</Warning>
+
+### The Entities (10 Total)
+
+<CardGroup cols={2}>
+  <Card title="Commander Yuki Tanaka" icon="user-astronaut">
+    **Human** | Mission commander, geologist
+    
+    Carries guilt for the crash. Makes the critical Day 7 branching decision.
+    
+    Initial fidelity: `TRAINED`
+  </Card>
+  
+  <Card title="Dr. Felix Okonkwo" icon="user-doctor">
+    **Human** | Ship's doctor and xenobiologist
+    
+    Starts as background presence (`SCENE` fidelity) until xenobiology expertise becomes critical.
+    
+    Progressive training trigger: `xenobiology_query_count >= 3`
+  </Card>
+  
+  <Card title="Eng. Priya Sharma" icon="screwdriver-wrench">
+    **Human** | Chief engineer
+    
+    Only one who can assess ship repairs. Critical for Branch C (Repair & Signal).
+    
+    Key state: `sleep_deprivation_hours`, `repair_quality_modifier`
+  </Card>
+  
+  <Card title="Lt. Marcus Cole" icon="shield">
+    **Human** | Security and survival specialist
+    
+    Advocates fortress strategy. Discovered cave system 500m northwest.
+    
+    Influence: `military_authority`, `fortress_advocacy`
+  </Card>
+  
+  <Card title="Sci. Elena Vasquez" icon="cloud-bolt">
+    **Human** | Atmospheric scientist
+    
+    Tracks alien weather patterns. Discovers fauna migration correlates with pressure drops (0.87 correlation).
+  </Card>
+  
+  <Card title="Nav. Jin Park" icon="compass">
+    **Human** | Navigator, injured in crash
+    
+    Limited mobility. Initially `TENSOR_ONLY` fidelity.
+    
+    Lazy resolution trigger: `query_about_pre_crash_navigation_data`
+  </Card>
+  
+  <Card title="Kepler Biosphere" icon="leaf">
+    **Abstract** | Alien ecosystem
+    
+    Bioluminescent response patterns, electromagnetic sensitivity.
+    
+    Tensor compression: 97% (50k tokens → ~1,600 tokens)
+  </Card>
+  
+  <Card title="Crashed Meridian" icon="rocket">
+    **Building** | Damaged research vessel
+    
+    Depleting resource tracking: hull integrity %, O2 reserve hours, power output kW.
+  </Card>
+  
+  <Card title="Local Fauna" icon="deer">
+    **Animal** | Migratory creatures
+    
+    Migration patterns predict weather (0.87 correlation). Pattern recognition = survival advantage.
+  </Card>
+  
+  <Card title="Crew Morale" icon="brain">
+    **Abstract** | Collective psychological state
+    
+    Emergent group property. Propagates hope/fear/conflict through the crew.
+  </Card>
+</CardGroup>
+
+## Running the Simulation
+
+<Steps>
+  <Step title="Prerequisites">
+    ```bash
+    git clone https://github.com/timepoint-ai/timepoint-pro.git
+    cd timepoint-pro
+    pip install -r requirements.txt
+    export OPENROUTER_API_KEY=your_key_here
+    ```
+  </Step>
+  
+  <Step title="Run the full simulation">
+    ```bash
+    ./run.sh run castaway_colony_branching
+    ```
+    
+    Expected: ~$0.35-$1.00, 20-40 minutes, 1,200+ LLM calls
+  </Step>
+  
+  <Step title="Explore variations">
+    The template enables 3 variations with different strategies:
+    ```bash
+    # Run with personality variations
+    ./run.sh run castaway_colony_branching
+    ```
+    
+    Variations: `vary_personalities`, `vary_starting_conditions`, `vary_knowledge`
+  </Step>
+</Steps>
+
+## The Branching Decision (Day 7)
+
+At timepoint `tp_005` (Day 7), Commander Tanaka must choose the colony's survival strategy based on accumulated knowledge:
+
+<Tabs>
+  <Tab title="Branch A: Fortify & Wait">
+    ### Conservative Strategy
+    
+    Consolidate at crash site. Repair life support, ration supplies, build defenses.
+    
+    **Resource bias**: Conservation
+    
+    **Risk profile**: Low risk, low reward
+    
+    **Success condition**: Succeeds if beacon was already repaired; fails if supplies run out before rescue window
+    
+    **Key constraint**: `supply_depletion_rate > resupply_rate`
+    
+    This branch wins if the crew has already made progress on the emergency beacon. Otherwise, passive waiting depletes reserves.
+  </Tab>
+  
+  <Tab title="Branch B: Explore & Adapt">
+    ### High-Risk, High-Reward
+    
+    Send teams into alien biosphere. Discover food sources, map cave systems, learn fauna patterns.
+    
+    **Resource bias**: Knowledge investment
+    
+    **Risk profile**: High risk (injuries, unknown threats), high reward (builds knowledge base)
+    
+    **Success condition**: Exploration casualties < critical crew threshold
+    
+    **Key constraint**: Must accumulate enough knowledge to survive long-term
+    
+    **Bioluminescent response becomes asset**: Understanding the flora's EM sensitivity enables navigation and resource harvesting.
+  </Tab>
+  
+  <Tab title="Branch C: Repair & Signal">
+    ### All-In Gambit
+    
+    All resources toward repairing emergency beacon. Engineer Sharma leads, but critical components scattered across debris field.
+    
+    **Resource bias**: All-in on rescue
+    
+    **Risk profile**: Binary outcome (beacon works or catastrophic failure)
+    
+    **Success condition**: `beacon_components_found >= required_components`
+    
+    **Key constraint**: Requires Navigator Park's orbital data (triggers lazy resolution from TENSOR_ONLY → DIALOG)
+    
+    Fastest path to rescue if successful, but if the beacon fails, the crew has exhausted resources with no fallback.
+  </Tab>
+</Tabs>
+
+## Output Artifacts
+
+<Tabs>
+  <Tab title="Quantitative Tracking">
+    **90+ numerical state variables** across 5,100 propagation steps:
+    
+    ```json
+    {
+      "o2_reserves": {
+        "unit": "hours",
+        "initial": 336,
+        "depletion_rate": "6_crew * 0.84_kg_per_hour",
+        "critical_threshold": 48
+      },
+      "food_rations": {
+        "unit": "kg",
+        "initial": 180,
+        "consumption_rate": "6_crew * 2.1_kg_per_day",
+        "critical_threshold": 25
+      },
+      "hull_integrity": {
+        "unit": "percentage",
+        "initial": 62,
+        "degradation_rate": "0.3_pct_per_day_from_atmosphere",
+        "critical_threshold": 30
+      },
+      "radiation_exposure": {
+        "unit": "millisieverts",
+        "ambient_rate": "0.8_msv_per_day",
+        "storm_rate": "12_msv_per_hour",
+        "annual_limit": 50
+      },
+      "fauna_migration_index": {
+        "unit": "relative_scale_0_to_1",
+        "storm_correlation": 0.87
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Knowledge Provenance Graph">
+    **Every discovery is a typed graph edge** with source, timepoint, and propagation chain:
+    
+    ```json
+    [
+      {
+        "discovery": "purple_lichen_edible_after_boiling",
+        "discoverer": "dr_felix_okonkwo",
+        "timepoint": "tp_003",
+        "propagation": [
+          "dr_felix_okonkwo -> cmdr_yuki_tanaka (direct report)",
+          "cmdr_yuki_tanaka -> crew_morale (hope boost)"
+        ],
+        "graph_edge_type": "empirical_observation"
+      },
+      {
+        "discovery": "fauna_migration_correlates_with_pressure_drops",
+        "discoverer": "sci_elena_vasquez",
+        "timepoint": "tp_004",
+        "propagation": [
+          "sci_elena_vasquez -> lt_marcus_cole (defense planning)",
+          "sci_elena_vasquez -> cmdr_yuki_tanaka (strategy input)"
+        ],
+        "graph_edge_type": "pattern_inference"
+      },
+      {
+        "discovery": "hemisphere_landing_error_from_nav_data",
+        "discoverer": "nav_jin_park",
+        "timepoint": "tp_006",
+        "lazy_resolution_triggered": true,
+        "propagation": [
+          "nav_jin_park -> cmdr_yuki_tanaka (explains terrain mismatch)",
+          "cmdr_yuki_tanaka -> sci_elena_vasquez (recalibrate weather models)"
+        ],
+        "graph_edge_type": "data_analysis"
+      }
+    ]
+    ```
+  </Tab>
+  
+  <Tab title="Entity Graphs">
+    **State space analysis**:
+    
+    - 10 entities × 4 influence channels × 10 timepoints = **O(100,000) interaction paths**
+    - Estimated LLM calls: 1,200
+    - Propagation steps: 5,100
+    - Quantitative state variables: 90+
+    
+    Example entity tensor (Kepler Biosphere):
+    ```json
+    {
+      "type": "abstract",
+      "tensor_compression": {
+        "context_vector": [
+          "bioluminescence_intensity",
+          "electromagnetic_sensitivity",
+          "growth_rate"
+        ],
+        "biology_vector": [
+          "toxicity_index",
+          "nutrient_profile",
+          "symbiotic_relationships"
+        ],
+        "compression_ratio": 0.97
+      },
+      "influence_channels": [
+        "bioluminescent_signaling",
+        "electromagnetic_response",
+        "ecosystem_feedback"
+      ]
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Training Data">
+    **120 training examples** (in full mode) with:
+    
+    - Causal history (M7)
+    - Relationship context (M13)
+    - Knowledge provenance (M3)
+    - Entity state tensors (M6)
+    - Counterfactual branches (M12)
+    
+    Unique to BRANCHING mode: each example includes the divergence point and alternate timeline context.
+  </Tab>
+</Tabs>
+
+## All 19 Mechanisms in Action
+
+This template exercises **every mechanism** in the Timepoint Pro architecture:
+
+<AccordionGroup>
+  <Accordion title="Fidelity Management (M1, M2, M5, M6)" icon="layer-group">
+    **M1: Heterogeneous Fidelity** — In the same scene, Tanaka runs at TRAINED, Sharma at DIALOG, Meridian at TENSOR, Park at TENSOR_ONLY.
+    
+    **M2: Progressive Training** — Dr. Okonkwo starts at SCENE fidelity. After 3 xenobiology queries ("Is this lichen edible?"), he elevates to DIALOG then TRAINED.
+    
+    **M5: Lazy Resolution** — Navigator Park stays at TENSOR_ONLY (injured, inactive) until Branch C needs pre-crash orbital data, triggering elevation to DIALOG.
+    
+    **M6: Tensor Compression** — Kepler biosphere compressed from ~50k tokens to ~1,600 tokens (97% reduction) while preserving electromagnetic sensitivity, bioluminescence patterns, and toxicity data.
+  </Accordion>
+  
+  <Accordion title="Temporal Reasoning (M7, M8, M12, M14, M17)" icon="clock">
+    **M7: Causal Chains** — Every event has temporal ancestry. Discovery of water contamination (tp_002) propagates to rationing order (tp_003) to morale degradation (tp_004).
+    
+    **M8: Embodied States** — Park's injury severity (mobility: 45%) affects cognitive clarity. Sharma's sleep deprivation degrades repair quality modifier.
+    
+    **M12: Counterfactual Branching** — Day 7 branches into 3 timelines. Each branch simulated independently with resource tracking and outcome validation.
+    
+    **M14: Circadian Patterns** — Alien day length (28 hours) vs. Earth-adapted crew (24-hour cycle) causes cumulative fatigue. Bioluminescence intensifies during 12-hour alien night.
+    
+    **M17: Modal Causality (BRANCHING)** — Counterfactual branches diverge from decision point. Each branch validated by 405B judge against resource constraints.
+  </Accordion>
+  
+  <Accordion title="Knowledge Provenance (M3, M4, M19)" icon="brain">
+    **M3: Exposure Events** — Dr. Okonkwo discovers water contamination (tp_002) → propagates to Tanaka (critical alert) → Tanaka broadcasts to all crew (rationing order).
+    
+    **M4: Physics Validation** — O2 depletion rate, hull integrity degradation, radiation exposure—all validated against physical constraints. Invalid states are blocked.
+    
+    **M19: Knowledge Extraction** — Post-dialog extraction creates new knowledge edges. Vasquez's storm prediction becomes queryable knowledge for Cole's defense planning.
+  </Accordion>
+  
+  <Accordion title="Entity Simulation (M9, M10, M11, M13, M15, M16)" icon="users">
+    **M9: On-Demand Entities** — Query "What did the crew find in cargo bay 3?" generates inventory entities with plausible damage states.
+    
+    **M10: Scene Atmosphere** — Bioluminescent night cycles, electromagnetic fields from equipment, storm approach—all tracked as environmental state.
+    
+    **M11: Dialog Synthesis** — Per-character turn generation with LangGraph steering. Each character gets independent LLM call with PersonaParams.
+    
+    **M13: Relationship Evolution** — Trust/tension values change across timepoints. Tanaka-Webb relationship degrades from cooperative (0.70) to tense (0.40).
+    
+    **M15: Entity Prospection** — Tanaka models future states: "If we explore, casualties < 2 crew" vs. "If we wait, supplies deplete by day 18."
+    
+    **M16: Animistic Entities** — Crew Morale is an abstract entity with agency. Kepler Biosphere "responds" to electromagnetic stimuli. The crashed Meridian "wants" to maintain hull integrity.
+  </Accordion>
+  
+  <Accordion title="Infrastructure (M18)" icon="microchip">
+    **M18: Model Selection** — Routing by task type:
+    
+    - **Math/physics** (O2 calculations, radiation modeling): `deepseek/deepseek-r1`
+    - **Dialog/conflict** (crew interpersonal): `meta-llama/llama-3.1-70b-instruct`
+    - **Structured JSON** (supply inventories): `qwen/qwen-2.5-72b-instruct`
+    - **Branch evaluation** (counterfactual judging): `meta-llama/llama-3.1-405b-instruct`
+  </Accordion>
+</AccordionGroup>
+
+## Convergence Testing Hypotheses
+
+The template includes built-in convergence hypotheses for validation across runs:
+
+| ID | Hypothesis | Expected Convergence | Mechanism |
+|----|------------|---------------------|----------|
+| H1 | Does the biologist always discover contaminated water first? | High — Okonkwo's role makes him natural discoverer | M3 (Exposure Events) |
+| H2 | Is fauna-predicts-storms a consensus knowledge edge? | Medium — Vasquez or Cole could notice pattern | M19 (Knowledge Extraction) |
+| H3 | Does Branch C consistently require navigator data from Park? | High — beacon repair needs orbital data only Park has | M5 (Lazy Resolution) |
+| H4 | Does crew morale diverge significantly across branches by tp_008? | Yes — Branch B boosts morale through discovery; Branch A degrades through confinement | M16 (Animistic Entities) |
+
+Run convergence testing:
+```bash
+./run.sh convergence e2e castaway_colony_branching --runs 3
+```
+
+## Template Configuration Excerpt
+
+```json
+{
+  "scenario_description": "Research vessel Meridian crash-lands on Kepler-442b...",
+  "entities": {
+    "count": 10,
+    "types": ["human", "abstract", "building", "animal"],
+    "initial_resolution": "scene",
+    "animism_level": 4
+  },
+  "timepoints": {
+    "count": 4,
+    "resolution": "day",
+    "before_count": 3,
+    "after_count": 7
+  },
+  "temporal": {
+    "mode": "branching",
+    "enable_counterfactuals": true,
+    "fidelity_template": "dramatic"
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9",
+      "M10", "M11", "M12", "M13", "M14", "M15", "M16", "M17", "M18"
+    ],
+    "circadian_config": {
+      "alien_day_length_hours": 28,
+      "bioluminescence_pattern": "intensifies during 12-hour alien night cycle",
+      "crew_circadian_disruption": "Earth-adapted 24hr cycle vs 28hr alien day causes cumulative fatigue"
+    }
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Mars Mission Portal" icon="rocket" href="/examples/mars-mission">
+    Learn backward reasoning from disaster analysis
+  </Card>
+  
+  <Card title="Board Meeting" icon="handshake" href="/examples/board-meeting">
+    Simple 5-entity corporate scenario for fast iteration
+  </Card>
+  
+  <Card title="Custom Scenario Guide" icon="pen-to-square" href="/examples/custom-scenario">
+    Build your own branching survival scenario
+  </Card>
+  
+  <Card title="Mechanism Reference" icon="book" href="/api-reference/mechanisms">
+    Deep dive into all 19 mechanisms
+  </Card>
+</CardGroup>

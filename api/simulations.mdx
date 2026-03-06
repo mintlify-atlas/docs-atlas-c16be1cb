@@ -1,0 +1,436 @@
+---
+title: 'Simulations API'
+description: 'Create and manage simulation jobs'
+---
+
+## Overview
+
+The Simulations API allows you to create, monitor, and manage simulation jobs. Simulations run asynchronously and can be tracked via status polling.
+
+## Job Lifecycle
+
+1. **PENDING** - Job created and queued
+2. **RUNNING** - Job is executing
+3. **COMPLETED** - Job finished successfully
+4. **FAILED** - Job encountered an error
+5. **CANCELLED** - Job was cancelled by user
+
+## Create Simulation
+
+Create a new simulation job. The job runs asynchronously in the background.
+
+```bash POST /simulations
+curl -X POST http://localhost:8080/simulations \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "board_meeting",
+    "entity_count": 5,
+    "timepoint_count": 10,
+    "temporal_mode": "FORWARD",
+    "description": "Board meeting simulation"
+  }'
+```
+
+### Request Body
+
+<ParamField body="template_id" type="string" required>
+  Template ID (see `/simulations/templates`)
+</ParamField>
+
+<ParamField body="entity_count" type="integer">
+  Number of entities (uses template default if not provided)
+</ParamField>
+
+<ParamField body="timepoint_count" type="integer">
+  Number of timepoints (uses template default if not provided)
+</ParamField>
+
+<ParamField body="temporal_mode" type="string">
+  Temporal mode: `FORWARD`, `PORTAL`, `BRANCHING`, `DIRECTORIAL`, or `CYCLICAL`
+</ParamField>
+
+<ParamField body="description" type="string">
+  Human-readable description
+</ParamField>
+
+<ParamField body="config" type="object">
+  Custom simulation configuration (overrides template defaults)
+</ParamField>
+
+### Response
+
+**Status**: `202 Accepted`
+
+<ResponseField name="job_id" type="string">
+  Unique job identifier
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status (PENDING)
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Creation timestamp
+</ResponseField>
+
+<ResponseField name="template_id" type="string">
+  Template used
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Job description
+</ResponseField>
+
+<ResponseField name="entity_count" type="integer">
+  Number of entities
+</ResponseField>
+
+<ResponseField name="timepoint_count" type="integer">
+  Number of timepoints
+</ResponseField>
+
+<ResponseField name="temporal_mode" type="string">
+  Temporal mode
+</ResponseField>
+
+<ResponseField name="owner_id" type="string">
+  User who created the job
+</ResponseField>
+
+```json
+{
+  "job_id": "job-abc123def456",
+  "status": "PENDING",
+  "created_at": "2026-03-06T12:00:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "template_id": "board_meeting",
+  "description": "Board meeting simulation",
+  "entity_count": 5,
+  "timepoint_count": 10,
+  "temporal_mode": "FORWARD",
+  "progress_percent": 0,
+  "current_step": null,
+  "run_id": null,
+  "entities_created": 0,
+  "timepoints_created": 0,
+  "cost_usd": 0.0,
+  "tokens_used": 0,
+  "error_message": null,
+  "owner_id": "user-123"
+}
+```
+
+### Rate Limits
+
+- **Free**: 1 concurrent job
+- **Basic**: 3 concurrent jobs
+- **Pro**: 10 concurrent jobs
+- **Enterprise**: Unlimited
+
+## Get Simulation
+
+Get details about a specific simulation job.
+
+```bash GET /simulations/{job_id}
+curl -X GET http://localhost:8080/simulations/job-abc123def456 \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+Returns a job object with updated status and progress information.
+
+```json
+{
+  "job_id": "job-abc123def456",
+  "status": "RUNNING",
+  "created_at": "2026-03-06T12:00:00Z",
+  "started_at": "2026-03-06T12:00:05Z",
+  "completed_at": null,
+  "template_id": "board_meeting",
+  "description": "Board meeting simulation",
+  "entity_count": 5,
+  "timepoint_count": 10,
+  "temporal_mode": "FORWARD",
+  "progress_percent": 45,
+  "current_step": "Generating dialog for timepoint 5",
+  "run_id": "run-2026-03-06-120005",
+  "entities_created": 5,
+  "timepoints_created": 4,
+  "cost_usd": 0.03,
+  "tokens_used": 1500,
+  "error_message": null,
+  "owner_id": "user-123"
+}
+```
+
+### Errors
+
+- `404 Not Found` - Job doesn't exist
+- `403 Forbidden` - Not the job owner
+
+## List Simulations
+
+List your simulation jobs with optional filtering.
+
+```bash GET /simulations
+curl -X GET "http://localhost:8080/simulations?status=RUNNING&page=1&page_size=20" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="status" type="string">
+  Filter by status: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, or `CANCELLED`
+</ParamField>
+
+<ParamField query="page" type="integer" default="1">
+  Page number
+</ParamField>
+
+<ParamField query="page_size" type="integer" default="20">
+  Jobs per page (1-100)
+</ParamField>
+
+### Response
+
+<ResponseField name="jobs" type="array">
+  Array of job objects
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total number of jobs
+</ResponseField>
+
+<ResponseField name="page" type="integer">
+  Current page
+</ResponseField>
+
+<ResponseField name="page_size" type="integer">
+  Page size
+</ResponseField>
+
+```json
+{
+  "jobs": [
+    {
+      "job_id": "job-abc123",
+      "status": "COMPLETED",
+      "created_at": "2026-03-06T10:00:00Z",
+      "completed_at": "2026-03-06T10:05:30Z",
+      "template_id": "board_meeting",
+      "description": "Board meeting simulation",
+      "cost_usd": 0.05,
+      "tokens_used": 2500
+    }
+  ],
+  "total": 15,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+## Get Simulation Result
+
+Get detailed results for a completed simulation.
+
+```bash GET /simulations/{job_id}/result
+curl -X GET http://localhost:8080/simulations/job-abc123def456/result \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="job" type="object">
+  Job metadata
+</ResponseField>
+
+<ResponseField name="entities" type="array">
+  Created entities (future: will load from database)
+</ResponseField>
+
+<ResponseField name="timepoints" type="array">
+  Created timepoints (future: will load from database)
+</ResponseField>
+
+<ResponseField name="relationships" type="array">
+  Entity relationships
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  Simulation summary
+</ResponseField>
+
+<ResponseField name="narrative_exports" type="array">
+  Generated narrative exports
+</ResponseField>
+
+<ResponseField name="convergence_score" type="number">
+  Simulation convergence score
+</ResponseField>
+
+<ResponseField name="robustness_grade" type="string">
+  Robustness grade
+</ResponseField>
+
+### Errors
+
+- `400 Bad Request` - Job is not completed
+- `404 Not Found` - Job doesn't exist
+- `403 Forbidden` - Not the job owner
+
+## Cancel Simulation
+
+Cancel a running or pending simulation.
+
+```bash POST /simulations/{job_id}/cancel
+curl -X POST http://localhost:8080/simulations/job-abc123def456/cancel \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "No longer needed"}'
+```
+
+### Request Body
+
+<ParamField body="reason" type="string">
+  Cancellation reason (optional)
+</ParamField>
+
+### Response
+
+Returns the job object with status `CANCELLED`.
+
+### Errors
+
+- `400 Bad Request` - Job cannot be cancelled (already completed/failed)
+- `404 Not Found` - Job doesn't exist
+- `403 Forbidden` - Not the job owner
+
+## Get Statistics
+
+Get statistics about your simulation jobs.
+
+```bash GET /simulations/stats
+curl -X GET http://localhost:8080/simulations/stats \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="total_jobs" type="integer">
+  Total jobs created
+</ResponseField>
+
+<ResponseField name="pending" type="integer">
+  Jobs pending
+</ResponseField>
+
+<ResponseField name="running" type="integer">
+  Jobs running
+</ResponseField>
+
+<ResponseField name="completed" type="integer">
+  Jobs completed
+</ResponseField>
+
+<ResponseField name="failed" type="integer">
+  Jobs failed
+</ResponseField>
+
+<ResponseField name="cancelled" type="integer">
+  Jobs cancelled
+</ResponseField>
+
+<ResponseField name="total_cost_usd" type="number">
+  Total cost across all jobs
+</ResponseField>
+
+<ResponseField name="total_tokens" type="integer">
+  Total tokens used
+</ResponseField>
+
+```json
+{
+  "total_jobs": 25,
+  "pending": 2,
+  "running": 1,
+  "completed": 20,
+  "failed": 1,
+  "cancelled": 1,
+  "total_cost_usd": 1.25,
+  "total_tokens": 62500
+}
+```
+
+## List Templates
+
+List available simulation templates.
+
+```bash GET /simulations/templates
+curl -X GET "http://localhost:8080/simulations/templates?category=showcase" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="category" type="string">
+  Filter by category
+</ParamField>
+
+<ParamField query="tier" type="string">
+  Filter by tier (quick/standard/stress)
+</ParamField>
+
+### Response
+
+<ResponseField name="templates" type="array">
+  Array of template objects
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total template count
+</ResponseField>
+
+<ResponseField name="categories" type="array">
+  Available categories
+</ResponseField>
+
+```json
+{
+  "templates": [
+    {
+      "template_id": "board_meeting",
+      "name": "Board Meeting",
+      "description": "Corporate board meeting with strategic decisions",
+      "category": "showcase",
+      "tier": "standard",
+      "mechanisms": ["M1", "M7", "M11"],
+      "default_entity_count": 5,
+      "default_timepoint_count": 8,
+      "estimated_cost_usd": 0.05,
+      "estimated_duration_seconds": 120
+    }
+  ],
+  "total": 21,
+  "categories": ["core", "showcase", "stress"]
+}
+```
+
+## Get Template
+
+Get details about a specific template.
+
+```bash GET /simulations/templates/{template_id}
+curl -X GET http://localhost:8080/simulations/templates/board_meeting \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+Returns a template object with all details.
+
+### Errors
+
+- `404 Not Found` - Template doesn't exist

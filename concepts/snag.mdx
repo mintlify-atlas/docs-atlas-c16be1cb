@@ -1,0 +1,233 @@
+---
+title: "SNAG vs RAG"
+description: "How Social Network Augmented Generation grounds LLMs in structured social graphs"
+---
+
+## The Fundamental Problem
+
+Large Language Models are powerful storytellers, but they're fragile reasoners. Naive single-prompt simulations collapse beyond ~10 entities or ~20 interactions due to:
+
+- **Inconsistency drift**: Entities forget facts, relationships change arbitrarily
+- **Token explosion**: Full-context approaches hit limits fast
+- **Causal incoherence**: No tracking of who knows what, when they learned it
+- **Hallucinated knowledge**: Entities magically know things they couldn't
+
+## What is SNAG?
+
+**SNAG (Social Network Augmented Generation)** is to social simulation what RAG (Retrieval Augmented Generation) is to document search.
+
+<CardGroup cols={2}>
+  <Card title="RAG" icon="book">
+    Retrieves documents to ground generation in factual knowledge
+  </Card>
+  <Card title="SNAG" icon="diagram-project">
+    Synthesizes social graphs to ground generation in causal structure
+  </Card>
+</CardGroup>
+
+## SNAG vs RAG: Side-by-Side
+
+| Dimension | RAG | SNAG (Timepoint Pro) |
+|-----------|-----|----------------------|
+| **Grounds LLMs in** | Retrieved documents | Synthesized social graphs |
+| **Maintains** | Document relevance | Causal provenance + temporal consistency |
+| **Scales to** | Millions of documents | Dozens of entities, hundreds of timepoints |
+| **Output** | Grounded answers | Auditable causal simulations + training data |
+| **Core Structure** | Document embeddings + retrieval | Entity tensors + exposure events + causal chains |
+| **Validation** | Relevance scoring | Multi-constraint validation (information conservation, energy budgets, network flow) |
+
+## How SNAG Grounds LLMs
+
+### 1. Structured Social Graph
+
+Every entity exists in a typed graph with:
+
+```python
+Entity:
+  - entity_id: str
+  - entity_type: "human" | "animal" | "building" | "abstract"
+  - tensor: TTMTensor  # Context, biology, behavior vectors
+  - resolution_level: ResolutionLevel  # TENSOR_ONLY → TRAINED
+  - entity_metadata: Dict  # Cognitive + physical state
+```
+
+### 2. Causal Provenance
+
+Knowledge doesn't appear magically—it has **exposure events**:
+
+```python
+ExposureEvent:
+  - entity_id: "thomas_jefferson"
+  - event_type: "learned" | "witnessed" | "told"
+  - information: "Madison's Virginia Plan notes"
+  - source: "james_madison"
+  - timestamp: datetime
+  - confidence: 0.95
+  - timepoint_id: "constitutional_convention_day_3"
+```
+
+**Validation constraint**: An entity cannot know something without a recorded exposure event explaining how they learned it.
+
+<Accordion title="Example: Constitutional Convention Knowledge Flow">
+  **Day 1**: Madison creates Virginia Plan → exposure event (type=`created`, source=`self`)
+  
+  **Day 3**: Madison shares with Washington → exposure event (type=`told`, source=`madison`, entity=`washington`)
+  
+  **Day 5**: Washington references plan in debate ✅ Valid (has exposure from Day 3)
+  
+  **Day 5**: Jefferson references plan ❌ INVALID (no exposure event, Jefferson not present)
+</Accordion>
+
+### 3. Temporal Consistency
+
+Timepoints form explicit causal chains:
+
+```python
+Timepoint:
+  - timepoint_id: "board_meeting_q3_2024"
+  - causal_parent: "board_meeting_q2_2024"  # Explicit link
+  - event_description: "CFO presents revised forecast"
+  - entities_present: ["ceo", "cfo", "vp_eng"]
+  - timestamp: datetime
+```
+
+An entity at timepoint T can only reference information from timepoints T' where a causal path exists from T' → T.
+
+### 4. Variable-Depth Fidelity
+
+Not all entities deserve equal computational attention:
+
+<Steps>
+  <Step title="TENSOR_ONLY (~200 tokens)">
+    Background entities: compressed state vectors only
+  </Step>
+  <Step title="SCENE (~2k tokens)">
+    Minor participants: scene-level behavior
+  </Step>
+  <Step title="GRAPH (~5k tokens)">
+    Secondary characters: relationship tracking
+  </Step>
+  <Step title="DIALOG (~10k tokens)">
+    Key participants: full dialog generation
+  </Step>
+  <Step title="TRAINED (~50k tokens)">
+    Protagonists: complete psychological depth
+  </Step>
+</Steps>
+
+Fidelity is **query-driven**: entities start compressed and elevate on-demand.
+
+## Why This Matters
+
+### Transform LLMs from Storytellers to Reasoners
+
+SNAG's structured propagation, variable-depth fidelity, and composable mechanisms let you scale to **dozens of entities across hundreds of timepoints** while keeping costs low and causality auditable.
+
+### Exponential Value at Scale
+
+The larger and more intricate the social system, the more emergent behaviors surface that intuition misses:
+
+<CodeGroup>
+```python Corporate Strategy
+# Board + investors + competitors
+# 12 entities, 24 timepoints, 3 counterfactual branches
+# Cost: ~$0.35, Time: ~8 minutes
+./run.sh run vc_pitch_branching
+```
+
+```python Crisis Simulation
+# Colony crew + Earth command + alien ecosystem
+# 8 entities, 16 timepoints, survival branches
+# Cost: ~$0.35, Time: ~12 minutes
+./run.sh run castaway_colony_branching
+```
+
+```python Historical Analysis
+# Constitutional convention delegates
+# 10 entities, 20 timepoints, PORTAL backward reasoning
+# Cost: ~$0.18, Time: ~6 minutes
+./run.sh run mars_mission_portal
+```
+</CodeGroup>
+
+### Superior Training Data
+
+SNAG outputs include:
+
+- **Full causal ancestry**: Every fact has provenance
+- **Counterfactual branches**: "What if" scenarios with controlled interventions
+- **Quantitative states**: Emotion tensors, energy budgets, confidence levels
+- **Dialog with context**: Every conversation includes relationship state, knowledge access, emotional tone
+
+## The 95% Cost Reduction
+
+Traditional approach: uniform high fidelity for all entities
+- 100 entities × 10 timepoints × 50k tokens = **50M tokens**
+
+SNAG approach: heterogeneous fidelity (power-law distribution)
+- ~10% TRAINED (5M tokens)
+- ~20% DIALOG (2M tokens) 
+- ~30% SCENE-GRAPH (1.5M tokens)
+- ~40% TENSOR_ONLY (80k tokens)
+- **Total: ~2.5M tokens (95% reduction)**
+
+<Note>
+Actual costs: **$0.15–$1.00 per run** depending on complexity and temporal mode.
+</Note>
+
+## Architecture Insight
+
+SNAG treats **fidelity as a query-driven 2D surface** over (entity, timepoint) space:
+
+```
+          Timepoints →
+Entities  T0   T1   T2   T3   T4
+  ↓
+CEO       [D] [T] [T] [T] [D]   ← High centrality
+CFO       [D] [D] [G] [S] [S]   ← Financial pivots
+Attendee  [S] [S] [S] [S] [S]   ← Background only
+
+T=TRAINED, D=DIALOG, G=GRAPH, S=SCENE
+```
+
+Resolution is **mutable**: queries elevate detail on-demand while preserving all established causal constraints.
+
+## Key Mechanisms
+
+<CardGroup cols={3}>
+  <Card title="M1: Heterogeneous Fidelity" icon="layer-group" href="/concepts/fidelity-management">
+    Power-law resolution distribution
+  </Card>
+  <Card title="M3: Exposure Events" icon="eye" href="/concepts/knowledge-provenance">
+    Tracked knowledge acquisition
+  </Card>
+  <Card title="M7: Causal Chains" icon="link" href="/concepts/temporal-modes">
+    Explicit temporal ancestry
+  </Card>
+  <Card title="M6: TTM Compression" icon="compress" href="/concepts/fidelity-management#m6-ttm-tensor-compression">
+    97% compression with structure
+  </Card>
+  <Card title="M11: Dialog Synthesis" icon="comments" href="/concepts/mechanisms#m11-dialog-synthesis">
+    Per-character turn generation
+  </Card>
+  <Card title="M17: Temporal Modes" icon="clock" href="/concepts/temporal-modes">
+    5 causality regimes
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Temporal Modes" icon="clock" href="/concepts/temporal-modes">
+    Learn how time itself can have different causal rules
+  </Card>
+  <Card title="Fidelity Management" icon="layer-group" href="/concepts/fidelity-management">
+    Deep dive into resolution levels and TTM tensors
+  </Card>
+  <Card title="Knowledge Provenance" icon="eye" href="/concepts/knowledge-provenance">
+    How exposure events prevent anachronisms
+  </Card>
+  <Card title="All 19 Mechanisms" icon="gears" href="/concepts/mechanisms">
+    Complete technical architecture
+  </Card>
+</CardGroup>

@@ -1,0 +1,307 @@
+---
+title: 'Forward Mode'
+description: 'Default temporal mode with strict causality and knowledge provenance'
+icon: 'arrow-right'
+---
+
+## What is Forward Mode?
+
+Forward mode is the **default temporal causality** in Timepoint Pro. Events flow from origin to endpoint in strict chronological order, with rigorous enforcement of causal dependencies and knowledge provenance.
+
+Think of Forward mode as **Pearl causality**: events occur because prior events caused them, and entities can only know what they've been explicitly exposed to.
+
+<Note>
+  **Core principle**: No anachronisms. An entity cannot reference knowledge they haven't yet acquired through an exposure event.
+</Note>
+
+## When to Use Forward Mode
+
+Use Forward mode when you need:
+
+- **Realistic causality** - Events must follow plausible cause-and-effect chains
+- **Knowledge tracking** - Who knows what, when, and from whom matters
+- **Legal/compliance scenarios** - Discovery timelines, information barriers, audit trails
+- **Training data** - Generate datasets where temporal logic must be sound
+- **Default behavior** - When no special temporal reasoning is needed
+
+<CardGroup cols={2}>
+  <Card title="Best for" icon="check">
+    - Board meetings
+    - Discovery timelines
+    - Regulatory audits
+    - Contract negotiations
+    - Multi-party investigations
+  </Card>
+  <Card title="Not ideal for" icon="xmark">
+    - Root cause analysis (use Portal)
+    - Counterfactual "what-ifs" (use Branching)
+    - Prophecy/fate narratives (use Cyclical)
+    - Dramatic storytelling (use Directorial)
+  </Card>
+</CardGroup>
+
+## How Forward Mode Works
+
+<Steps>
+  <Step title="Define Origin">
+    Specify the starting state with `origin_year` and initial conditions.
+    ```json
+    {
+      "temporal": {
+        "mode": "forward",
+        "origin_year": 2025
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Generate Consequents">
+    At each step, the system generates plausible **next states** based on:
+    - Current entity states and capabilities
+    - Available knowledge
+    - Causal necessity (what must follow given prior events)
+    - Resource constraints
+  </Step>
+
+  <Step title="Enforce Provenance">
+    Knowledge flows are tracked via **exposure events** (M3):
+    - `entity_a` learns `fact_x` from `entity_b` at `timepoint_5`
+    - `entity_a` cannot reference `fact_x` before `timepoint_5`
+    - Graph edges capture who-knows-what chains
+  </Step>
+
+  <Step title="Validate Causality">
+    Each forward step is validated for:
+    - Temporal consistency (no future knowledge)
+    - Entity capability (can they perform this action?)
+    - Resource availability (are required inputs present?)
+  </Step>
+</Steps>
+
+## Configuration
+
+Forward mode is the default. You can configure it explicitly in your template:
+
+```json
+{
+  "temporal": {
+    "mode": "forward",
+    "origin_year": 2025,
+    "backward_steps": 10,  // actually forward steps
+    "coherence_threshold": 0.7,
+    "candidate_antecedents_per_step": 3
+  }
+}
+```
+
+<Accordion title="Configuration Parameters">
+  | Parameter | Type | Default | Description |
+  |-----------|------|---------|-------------|
+  | `mode` | string | `"forward"` | Must be `"forward"` (or omit for default) |
+  | `origin_year` | int | required | Starting year for simulation |
+  | `backward_steps` | int | 10 | Number of forward timepoints to generate |
+  | `coherence_threshold` | float | 0.7 | Minimum plausibility score (0.0-1.0) |
+  | `candidate_antecedents_per_step` | int | 3 | Candidate futures per step |
+  | `exploration_mode` | string | `"adaptive"` | Strategy for path exploration |
+</Accordion>
+
+## Template Examples
+
+### Example 1: Board Meeting (Standard)
+
+From `showcase/board_meeting.json`:
+
+```json
+{
+  "scenario_description": "Tech startup board meeting with CEO acquisition proposal. 4 entities (CEO, lead investor, board member, advisor) discuss strategic options. Dialog synthesizes with relationship tracking.",
+  "temporal": {
+    "mode": "forward"  // implicit - this is default
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M1_heterogeneous_fidelity",
+      "M7_causal_chains",
+      "M11_dialog_synthesis",
+      "M13_relationship_tracking"
+    ]
+  }
+}
+```
+
+**Cost**: $0.05 | **Duration**: ~2min | **Entities**: 4 | **Timepoints**: 3-5
+
+### Example 2: Litigation Discovery (Forward with M19)
+
+From `persona/agent3_litigation_discovery.json`:
+
+```json
+{
+  "scenario_description": "FORWARD mode litigation with enforced information asymmetry through discovery timeline. Plaintiff counsel gains knowledge sequentially through document production, depositions, and expert reports.",
+  "temporal": {
+    "mode": "forward",
+    "origin_year": 2023
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M3_exposure_events",
+      "M7_causal_chains",
+      "M11_dialog_synthesis",
+      "M13_relationship_tracking",
+      "M19_information_asymmetry"  // Core mechanic
+    ]
+  }
+}
+```
+
+**Cost**: $0.06 | **Duration**: ~2min | **Use case**: Discovery timeline simulation
+
+<Tip>
+  **Knowledge provenance in action**: Plaintiff's attorney cannot reference the smoking-gun email until it's produced in discovery at timepoint 4, even though defense counsel knew about it from timepoint 1.
+</Tip>
+
+## Code: run() Method Signature
+
+Forward mode uses the **default workflow** in `workflows/temporal_agent.py`. There's no dedicated `ForwardStrategy` class because Forward is the baseline behavior.
+
+The main orchestrator is:
+
+```python
+# workflows/temporal_agent.py
+class TemporalAgent:
+    def run_simulation(
+        self,
+        config: TemporalConfig,
+        query_sequence: list[Query]
+    ) -> SimulationResult:
+        """
+        Default forward simulation with causal validation.
+        
+        Process:
+        1. Initialize entities at origin_year with initial_knowledge
+        2. For each forward step:
+           - Generate candidate next states
+           - Validate causal consistency
+           - Enforce knowledge provenance (M3)
+           - Update entity states
+        3. Return timeline with exposure event graph
+        """
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Seed Initial Knowledge Carefully">
+    What entities know at `t=0` determines what's possible downstream.
+    
+    ```json
+    {
+      "entity_roster": {
+        "ceo_sarah": {
+          "initial_knowledge": [
+            "company_financials_q4_2024",
+            "acquisition_offer_30m",
+            "board_member_names"
+          ]
+        }
+      }
+    }
+    ```
+    
+    **Why**: Entities can only reference facts they've been exposed to.
+  </Accordion>
+
+  <Accordion title="2. Use Exposure Events for Critical Knowledge">
+    For legally/causally sensitive information, create explicit exposure events:
+    
+    ```json
+    {
+      "timepoints": [
+        {
+          "event_description": "Document production: Email thread reveals price-fixing discussion",
+          "exposure_events": [
+            {
+              "source": "defense_counsel",
+              "target": "plaintiff_counsel",
+              "knowledge_transferred": "smoking_gun_email_thread"
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="3. Set Coherence Threshold Based on Scenario">
+    - **High-stakes legal/compliance**: `coherence_threshold: 0.8` (strict)
+    - **Exploratory ideation**: `coherence_threshold: 0.6` (permissive)
+    - **Training data generation**: `coherence_threshold: 0.7` (balanced)
+  </Accordion>
+
+  <Accordion title="4. Leverage Relationship Tracking (M13)">
+    Forward mode works beautifully with `M13_relationship_tracking`:
+    
+    - Trust evolves based on prior interactions
+    - Tension accumulates from conflicts
+    - Dialog tone reflects relationship state
+    
+    Enable in template:
+    ```json
+    {
+      "metadata": {
+        "mechanisms_featured": ["M13_relationship_tracking"]
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Cost Estimates
+
+<CardGroup cols={3}>
+  <Card title="Quick" icon="gauge-simple-low">
+    **$0.02 - $0.05**
+    
+    2-3 entities
+    
+    1-2 timepoints
+    
+    Under 1 min
+  </Card>
+  
+  <Card title="Standard" icon="gauge-simple">
+    **$0.05 - $0.20**
+    
+    4-6 entities
+    
+    3-5 timepoints
+    
+    1-5 min
+  </Card>
+  
+  <Card title="Comprehensive" icon="gauge-simple-high">
+    **$0.20 - $1.00**
+    
+    7-10 entities
+    
+    5-10 timepoints
+    
+    5-15 min
+  </Card>
+</CardGroup>
+
+## Related Mechanisms
+
+Forward mode commonly pairs with:
+
+- **M3 (Exposure Events)** - Knowledge provenance tracking
+- **M7 (Causal Chains)** - Event ordering validation
+- **M11 (Dialog Synthesis)** - Multi-turn conversation generation
+- **M13 (Relationship Evolution)** - Trust/tension dynamics
+- **M19 (Information Asymmetry)** - Enforced knowledge barriers
+
+<Card title="Next: Explore Other Modes" icon="compass">
+  - [Portal Mode](/temporal-modes/portal) - Backward reasoning from outcomes
+  - [Branching Mode](/temporal-modes/branching) - Counterfactual timelines
+  - [Cyclical Mode](/temporal-modes/cyclical) - Repeating patterns and prophecy
+  - [Directorial Mode](/temporal-modes/directorial) - Narrative-driven arcs
+</Card>

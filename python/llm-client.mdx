@@ -1,0 +1,617 @@
+---
+title: 'LLM Client'
+description: 'Centralized LLM service client with structured output and persona-based generation'
+icon: 'brain'
+---
+
+## Overview
+
+The `LLMClient` provides a unified interface for LLM operations with backward compatibility and centralized service architecture. Supports structured output, persona-based generation, and comprehensive error handling.
+
+**Module:** `llm_v2.py`
+
+**Architecture:**
+```
+LLMClient
+    ↓
+LLMService (centralized)
+    ↓
+Provider (OpenRouter, OpenAI, etc.)
+    ↓
+API Client
+```
+
+## Initialization
+
+### from_hydra_config()
+
+Create client from Hydra configuration.
+
+**Signature:**
+```python
+@classmethod
+def from_hydra_config(
+    cls,
+    cfg: Any,
+    use_centralized_service: bool = True
+) -> "LLMClient"
+```
+
+**Parameters:**
+- `cfg`: Hydra config object with `llm` section
+- `use_centralized_service`: Use new centralized service (recommended)
+
+**Example:**
+```python
+from llm_v2 import LLMClient
+import hydra
+
+@hydra.main(config_path="conf", config_name="config")
+def main(cfg):
+    llm = LLMClient.from_hydra_config(cfg)
+    # Use llm...
+```
+
+### Direct Initialization
+
+**Signature:**
+```python
+def __init__(
+    self,
+    api_key: str,
+    base_url: str = "https://openrouter.ai/api/v1",
+    default_model: str | None = None,
+    model_cache_ttl_hours: int = 24,
+    use_centralized_service: bool = True,
+    service_config: LLMServiceConfig | None = None
+)
+```
+
+**Example:**
+```python
+from llm_v2 import LLMClient
+import os
+
+llm = LLMClient(
+    api_key=os.getenv("OPENROUTER_API_KEY"),
+    default_model="meta-llama/llama-3.1-70b-instruct",
+    use_centralized_service=True
+)
+```
+
+## Core Methods
+
+### populate_entity()
+
+Populate entity with structured LLM output.
+
+**Signature:**
+```python
+def populate_entity(
+    self,
+    entity_schema: dict,
+    context: dict,
+    previous_knowledge: list[str] = None,
+    model: str | None = None
+) -> EntityPopulation
+```
+
+**Parameters:**
+- `entity_schema`: Entity schema with `entity_id`
+- `context`: Context information for generation
+- `previous_knowledge`: Previous knowledge state (for evolution)
+- `model`: Model override
+
+**Returns:** `EntityPopulation` with:
+- `entity_id`: Entity identifier
+- `knowledge_state`: List of knowledge items (3-8 items)
+- `energy_budget`: Cognitive resources (0-100)
+- `personality_traits`: 5 floats between -1 and 1
+- `temporal_awareness`: Time perception description
+- `confidence`: Generation confidence (0-1)
+
+**Example:**
+```python
+entity_schema = {
+    "entity_id": "alexander_hamilton"
+}
+
+context = {
+    "timepoint": "1787-05-25",
+    "location": "Philadelphia",
+    "event": "Constitutional Convention"
+}
+
+population = llm.populate_entity(entity_schema, context)
+
+print(f"Knowledge: {population.knowledge_state}")
+print(f"Energy: {population.energy_budget}")
+print(f"Traits: {population.personality_traits}")
+```
+
+**Intelligent Retry Logic:**
+- Attempts with multiple models (70B → 405B → Qwen 72B)
+- Temperature adjustment (0.5 → 0.3 → 0.8)
+- Fallback defaults if LLM fails
+
+### score_relevance()
+
+Score how relevant a knowledge item is to a query.
+
+**Signature:**
+```python
+def score_relevance(
+    self,
+    query: str,
+    knowledge_item: str,
+    model: str | None = None
+) -> float
+```
+
+**Returns:** Relevance score (0.0-1.0)
+- `1.0`: Perfectly relevant, directly answers query
+- `0.5`: Somewhat relevant but not central
+- `0.0`: Completely irrelevant
+
+**Example:**
+```python
+query = "What are Hamilton's views on central banking?"
+knowledge = "Founded First Bank of United States"
+
+score = llm.score_relevance(query, knowledge)
+print(f"Relevance: {score:.2f}")
+```
+
+### generate_structured()
+
+Generate structured output using Pydantic schema.
+
+**Signature:**
+```python
+def generate_structured(
+    self,
+    prompt: str,
+    response_model: type,
+    model: str | None = None,
+    **kwargs
+)
+```
+
+**Parameters:**
+- `prompt`: Generation prompt
+- `response_model`: Pydantic model class for output
+- `model`: Model override
+- `**kwargs`: Additional parameters (temperature, max_tokens, etc.)
+
+**Example:**
+```python
+from pydantic import BaseModel
+
+class Analysis(BaseModel):
+    summary: str
+    key_points: list[str]
+    confidence: float
+
+prompt = "Analyze the Federalist Papers"
+result = llm.generate_structured(
+    prompt,
+    Analysis,
+    temperature=0.3,
+    max_tokens=1000
+)
+
+print(result.summary)
+print(result.key_points)
+```
+
+### validate_consistency()
+
+Validate temporal consistency of entities.
+
+**Signature:**
+```python
+def validate_consistency(
+    self,
+    entities: list[dict],
+    timepoint: datetime,
+    model: str | None = None
+) -> ValidationResult
+```
+
+**Returns:** `ValidationResult` with:
+- `is_valid`: Boolean (true if no issues)
+- `violations`: List of problems found
+- `confidence`: Validation confidence (0-1)
+- `reasoning`: Explanation of result
+
+**Checks:**
+- Anachronisms (knowledge before event)
+- Biological impossibilities (age, health)
+- Knowledge contradictions
+
+**Example:**
+```python
+from datetime import datetime
+
+entities = [
+    {"entity_id": "hamilton", "age": 32, "knowledge": [...]},
+    {"entity_id": "jefferson", "age": 44, "knowledge": [...]}
+]
+
+timepoint = datetime(1787, 5, 25)
+result = llm.validate_consistency(entities, timepoint)
+
+if not result.is_valid:
+    for violation in result.violations:
+        print(f"⚠️ {violation}")
+```
+
+## Dialog Generation
+
+### generate_dialog()
+
+Generate structured dialog with turns and metadata.
+
+**Signature:**
+```python
+def generate_dialog(
+    self,
+    prompt: str,
+    max_tokens: int = 2000,
+    model: str | None = None
+) -> DialogData
+```
+
+**Returns:** `DialogData` with:
+- `turns`: List of `DialogTurn` objects
+- `total_duration`: Estimated duration (seconds)
+- `information_exchanged`: Knowledge items passed
+- `relationship_impacts`: How relationships changed
+- `atmosphere_evolution`: Atmosphere changes over time
+
+**Example:**
+```python
+prompt = """
+Generate dialog between Hamilton and Jefferson debating federal power.
+Setting: 1791 Cabinet meeting
+Tension: High (0.8)
+Duration: 5 minutes
+"""
+
+dialog = llm.generate_dialog(prompt, max_tokens=3000)
+
+for turn in dialog.turns:
+    print(f"{turn.speaker}: {turn.content}")
+    if turn.emotional_tone:
+        print(f"  Tone: {turn.emotional_tone}")
+```
+
+### generate_single_turn()
+
+Generate one dialog turn with persona-derived parameters.
+
+**Signature:**
+```python
+def generate_single_turn(
+    self,
+    system_prompt: str,
+    user_prompt: str,
+    persona_params: PersonaParams,
+    model: str | None = None
+) -> dict[str, Any]
+```
+
+**Returns:** Dictionary with:
+- `content`: Dialog text
+- `emotional_tone`: Emotional state
+- `knowledge_references`: Referenced knowledge items
+
+**Example:**
+```python
+from synth.params2persona import PersonaParams
+
+persona = PersonaParams(
+    temperature=0.7,
+    top_p=0.9,
+    max_tokens=500,
+    frequency_penalty=0.2,
+    presence_penalty=0.1
+)
+
+system = "You are Alexander Hamilton, debating federal power."
+user = "Respond to Jefferson's critique of centralization."
+
+turn = llm.generate_single_turn(system, user, persona)
+print(turn['content'])
+```
+
+## Advanced Methods
+
+### generate_expectations()
+
+Generate expectations for prospection mechanism (M15).
+
+**Signature:**
+```python
+def generate_expectations(
+    self,
+    entity_context: dict,
+    timepoint_context: dict,
+    model: str | None = None
+) -> list[Expectation]
+```
+
+**Example:**
+```python
+entity_context = {
+    "entity_id": "hamilton",
+    "forecast_horizon_days": 30,
+    "max_expectations": 5,
+    "knowledge_sample": ["Bank plan ready", "Opposition growing"],
+    "personality": {"risk_tolerance": 0.8}
+}
+
+timepoint_context = {
+    "current_timepoint": "1791-01-15",
+    "current_timestamp": "1791-01-15T10:00:00"
+}
+
+expectations = llm.generate_expectations(
+    entity_context,
+    timepoint_context
+)
+
+for exp in expectations:
+    print(f"Event: {exp.predicted_event}")
+    print(f"Probability: {exp.subjective_probability}")
+    print(f"Actions: {exp.preparation_actions}")
+```
+
+### enrich_animistic_entity()
+
+Enrich animistic entity with LLM-generated background (M16).
+
+**Signature:**
+```python
+def enrich_animistic_entity(
+    self,
+    entity_id: str,
+    entity_type: str,
+    base_metadata: dict,
+    context: dict,
+    model: str | None = None
+) -> dict
+```
+
+**Supported Entity Types:**
+- `animal`: Species, biological state, training
+- `building`: Structure, capacity, age, condition
+- `abstract`: Concepts, propagation, carriers
+
+**Example:**
+```python
+base_metadata = {
+    "species": "horse",
+    "age": 5,
+    "training_level": 0.7
+}
+
+context = {
+    "timepoint_context": "1787 Philadelphia"
+}
+
+enriched = llm.enrich_animistic_entity(
+    "washington_horse",
+    "animal",
+    base_metadata,
+    context
+)
+
+print(enriched['llm_enrichment']['background_story'])
+print(enriched['llm_enrichment']['notable_traits'])
+```
+
+### generate_scene_atmosphere()
+
+Generate rich narrative description of scene atmosphere.
+
+**Signature:**
+```python
+def generate_scene_atmosphere(
+    self,
+    timepoint: dict,
+    entities: list,
+    environment: dict,
+    atmosphere_data: dict,
+    model: str | None = None
+) -> dict
+```
+
+**Returns:** Dictionary with:
+- `atmospheric_narrative`: Vivid 2-3 paragraph description
+- `dominant_mood`: Overall emotional tone
+- `sensory_details`: Key sensory observations
+- `social_dynamics`: Interaction patterns
+- `historical_context`: Period-appropriate cultural notes
+
+**Example:**
+```python
+timepoint = {
+    "event_description": "Constitutional debate",
+    "timestamp": "1787-05-25T14:00:00"
+}
+
+environment = {
+    "location": "Independence Hall",
+    "ambient_temperature": 22,
+    "lighting_level": 0.7,
+    "weather": "overcast"
+}
+
+atmosphere_data = {
+    "tension_level": 0.8,
+    "formality_level": 0.9,
+    "emotional_valence": -0.2,
+    "energy_level": 0.7
+}
+
+atmosphere = llm.generate_scene_atmosphere(
+    timepoint,
+    entities,
+    environment,
+    atmosphere_data
+)
+
+print(atmosphere['atmospheric_narrative'])
+print(f"Mood: {atmosphere['dominant_mood']}")
+```
+
+### predict_counterfactual_outcome()
+
+Predict outcomes of counterfactual interventions (M12).
+
+**Signature:**
+```python
+def predict_counterfactual_outcome(
+    self,
+    baseline_timeline: dict,
+    intervention: dict,
+    affected_entities: list,
+    model: str | None = None
+) -> dict
+```
+
+**Returns:** Dictionary with:
+- `immediate_effects`: Direct consequences
+- `ripple_effects`: Cascading changes
+- `entity_state_changes`: Predicted entity changes
+- `divergence_significance`: Timeline difference magnitude (0-1)
+- `timeline_narrative`: Divergent timeline description
+- `probability_assessment`: Prediction confidence (0-1)
+- `key_turning_points`: Critical moments of change
+
+**Example:**
+```python
+baseline = {
+    "timeline_id": "baseline",
+    "event_summary": "Constitution ratified 1788"
+}
+
+intervention = {
+    "type": "entity_removal",
+    "target": "alexander_hamilton",
+    "intervention_point": "tp_001",
+    "description": "Hamilton absent from convention"
+}
+
+affected = [
+    {"entity_id": "madison"},
+    {"entity_id": "washington"}
+]
+
+prediction = llm.predict_counterfactual_outcome(
+    baseline,
+    intervention,
+    affected
+)
+
+print(prediction['timeline_narrative'])
+for effect in prediction['ripple_effects']:
+    print(f"- {effect}")
+```
+
+## Statistics and Monitoring
+
+**Token Tracking:**
+```python
+llm.token_count  # Total tokens used
+llm.cost         # Total cost (USD)
+```
+
+**Service Statistics:**
+```python
+stats = llm.service.get_statistics()
+print(f"Total tokens: {stats['logger_stats']['total_tokens']}")
+print(f"Total cost: ${stats['total_cost']:.4f}")
+```
+
+## Model Management
+
+**Default Model:**
+- `meta-llama/llama-3.1-70b-instruct` (70B parameters)
+- 327K context window (Llama 4 Scout)
+
+**Fallback Models:**
+- `meta-llama/llama-3.1-405b-instruct` (405B, 100K output)
+- `qwen/qwen-2.5-72b-instruct` (72B, alternative provider)
+
+**Model Override:**
+```python
+# Override via environment variable
+import os
+os.environ["TIMEPOINT_MODEL_OVERRIDE"] = "gpt-4"
+
+# Override per-call
+result = llm.populate_entity(
+    entity_schema,
+    context,
+    model="meta-llama/llama-3.1-405b-instruct"
+)
+```
+
+## Error Handling
+
+**Automatic Retry:**
+- Multiple model attempts
+- Temperature adjustment
+- Exponential backoff
+
+**Fallback Behavior:**
+- Empty knowledge_state → Generate defaults
+- JSON parse failure → Heuristic scoring
+- API timeout → Return safe defaults
+
+**Error Messages:**
+```python
+try:
+    result = llm.populate_entity(schema, context)
+except RuntimeError as e:
+    print(f"LLM error: {e}")
+    # Check logs/llm_calls/*.jsonl for details
+```
+
+## Configuration
+
+**Hydra Config (config.yaml):**
+```yaml
+llm:
+  api_key: ${oc.env:OPENROUTER_API_KEY}
+  base_url: https://openrouter.ai/api/v1
+  model: meta-llama/llama-3.1-70b-instruct
+  model_cache_ttl_hours: 24
+
+llm_service:
+  provider: openrouter
+  mode: production
+  defaults:
+    temperature: 0.7
+    max_tokens: 1500
+```
+
+## Best Practices
+
+1. **Use centralized service** (default, better monitoring)
+2. **Provide context** for better entity population
+3. **Set max_tokens** appropriately for task
+4. **Use structured_call** for Pydantic schemas
+5. **Monitor token usage** for cost control
+6. **Handle errors** gracefully with fallbacks
+7. **Check confidence** scores before using results
+8. **Log all calls** for debugging and analysis
+
+## Related
+
+- [Orchestrator](/python/orchestrator) - Scene compilation
+- [Storage](/python/storage) - Entity persistence
+- [Workflows](/python/workflows) - Entity training
+- [Schemas](/python/schemas) - Data models

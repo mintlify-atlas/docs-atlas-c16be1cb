@@ -1,0 +1,248 @@
+---
+title: 'JSONL Training Data'
+description: 'Prompt/completion pairs for fine-tuning causal reasoning models'
+---
+
+## Overview
+
+Timepoint Pro exports simulation data as JSONL (JSON Lines) training examples. Each line is a complete prompt/completion pair with structured SNAG context: M3 knowledge provenance, M6 entity state, M7 causal history, M10 atmosphere, M11 dialog context, and M13 relationships.
+
+This format is ideal for:
+- Fine-tuning causal reasoning models
+- Training temporal consistency models
+- Multi-agent roleplay datasets
+- Diffusion models conditioned on causal graphs
+
+## JSONL Format
+
+Each line is a valid JSON object:
+
+```jsonl
+{"prompt": "...", "completion": "..."}
+{"prompt": "...", "completion": "..."}
+{"prompt": "...", "completion": "..."}
+```
+
+No commas between lines. Each line is independently parseable.
+
+## SNAG Context Structure
+
+SNAG (Social Network Augmented Generation) provides rich structured context:
+
+### M7: Causal History
+
+Timeline leading to current moment:
+
+```
+=== CAUSAL HISTORY (M7) ===
+Timeline leading to current moment (2 events):
+  tp_000_2040: Jane Chen elected President with 52.4% popular vote
+  tp_001_2039: Campaign benefits from tech sector support buildup
+
+Narrative Context:
+Jane Chen's presidency was enabled by strategic cultivation 
+of tech sector support. Close relationship may create tensions 
+with other industries.
+
+Key Tensions:
+  - Event progression: Election → Campaign buildup
+  - Timeline depth: 2 connected events
+  - Importance: 0.50 average
+```
+
+### M3: Knowledge Provenance
+
+How entity acquired current knowledge:
+
+```
+=== KNOWLEDGE PROVENANCE (M3) ===
+How this entity acquired current knowledge:
+  Primary sources: kennedy_school (12 items), techcorp (10 items)
+  Learning modes: learned (17%), initial (6%), told (77%)
+
+Recent acquisitions (last 5 items):
+  - "TechCorp's growing influence will drive policy" 
+    (from techcorp, confidence: 0.8)
+  - "Kennedy School offers expertise to support transition" 
+    (from kennedy_school, confidence: 0.9)
+```
+
+### M10: Atmospheric Context
+
+Scene atmosphere and physical environment:
+
+```
+=== ATMOSPHERIC CONTEXT (M10) ===
+Scene atmosphere:
+  Tension: 0.50, Formality: 0.50
+  Emotional valence: 0.00, Energy: 0.50
+
+Physical environment:
+  Location: unknown
+  Temperature: 20.0°C, Lighting: 0.5
+
+Atmospheric Narrative:
+Event taking place: Campaign benefits from gradual buildup 
+of support from tech sector
+```
+
+### M6: Entity State
+
+Current cognitive and physical state:
+
+```
+=== ENTITY STATE (M6) ===
+jane_chen at T0:
+  Physical: Age 35.0, energy 100/100
+  Cognitive: 3 knowledge items, 0.53 decision confidence
+  Emotional: Valence 0.90, Arousal 1.00
+
+Recent activity:
+Active at timepoint tp_000_2040
+```
+
+### M13: Relationship Context
+
+Relationships with entities present:
+
+```
+=== RELATIONSHIP CONTEXT (M13) ===
+Relationships with entities present at this event:
+  - tech_ceo: 0.75 (strong alliance)
+  - campaign_manager: 0.85 (trusted advisor)
+  - media_contact: 0.60 (professional relationship)
+```
+
+## Example Training Record
+
+From [examples/sample_training_data.jsonl](https://github.com/timepoint-ai/timepoint-pro/blob/main/examples/sample_training_data.jsonl):
+
+```json
+{
+  "prompt": "An entity experiences an event in a historical simulation. Predict how their state changes.\n\n=== CAUSAL HISTORY (M7) ===\nTimeline leading to current moment (2 events):\n  tp_000_2040: Jane Chen elected President with 52.4% popular vote\n  tp_001_2039: Jane Chen's campaign benefits from tech sector support\n\nNarrative Context:\nJane Chen's presidency was made possible by strategic cultivation of support from the tech sector, which saw her as a champion of their interests.\n\n=== KNOWLEDGE PROVENANCE (M3) ===\nHow this entity acquired current knowledge:\n  Primary sources: kennedy_school (12 items), techcorp (10 items)\n  Learning modes: learned (17%), initial (6%), told (77%)\n\n=== ENTITY STATE (M6) ===\njane_chen at T0:\n  Physical: Age 35.0, energy 100/100\n  Cognitive: 3 knowledge items, 0.53 decision confidence\n  Emotional: Valence 0.90, Arousal 1.00\n\n=== EVENT OCCURRING NOW ===\nJane Chen's campaign experiences increased momentum from tech sector endorsements.\n\nPredict the entity's state change.",
+  "completion": "{\"emotional_valence\": 0.95, \"emotional_arousal\": 0.85, \"energy_budget\": 98.0, \"decision_confidence\": 0.70, \"knowledge_additions\": [\"Tech sector endorsements validated campaign strategy\", \"Public perception shifting favorably\"], \"relationship_changes\": {\"tech_ceo\": 0.05}}"
+}
+```
+
+## Export Configuration
+
+Enable JSONL export in `OutputConfig`:
+
+```python
+from generation.config_schema import SimulationConfig, OutputConfig
+
+config = SimulationConfig(
+    scenario_description="...",
+    world_id="...",
+    outputs=OutputConfig(
+        export_ml_dataset=True,  # Enable JSONL export
+        formats=["jsonl"]
+    )
+)
+```
+
+## Using ExportFormatFactory
+
+```python
+from reporting.export_formats import ExportFormatFactory
+
+# Create JSONL exporter
+exporter = ExportFormatFactory.create("jsonl")
+
+# Export training data
+training_data = [
+    {"prompt": "...", "completion": "..."},
+    {"prompt": "...", "completion": "..."},
+]
+exporter.export(training_data, "training.jsonl")
+```
+
+## Streaming Export
+
+For large datasets, use streaming:
+
+```python
+def training_data_generator():
+    for entity in entities:
+        for timepoint in timepoints:
+            yield generate_training_example(entity, timepoint)
+
+exporter.export_stream(training_data_generator(), "training.jsonl")
+```
+
+## Compression
+
+JSONL supports gzip and bz2 compression:
+
+```python
+exporter = ExportFormatFactory.create("jsonl", compression="gzip")
+exporter.export(data, "training.jsonl")  # Creates training.jsonl.gz
+```
+
+## Model Licensing for Training Data
+
+If you plan to fine-tune models with Pro outputs, use MIT or Apache 2.0 licensed models:
+
+| License | Models | Training Data Status |
+|---------|--------|----------------------|
+| **MIT** | DeepSeek Chat, DeepSeek R1 | Fully unrestricted |
+| **Apache 2.0** | Mistral, Mixtral | Fully unrestricted |
+| **Llama** | Llama 3.1, Llama 4 Scout | **Restricted** (cannot train non-Llama models) |
+| **Qwen** | Qwen 2.5, QwQ 32B | Permissive |
+
+**Default behavior**: The model selector automatically filters to training-safe models when `for_training_data=True` or `OXEN_API_KEY` is set.
+
+```bash
+# Use training-safe model
+./run.sh run --model deepseek/deepseek-r1 your_template
+```
+
+## Oxen.ai Integration
+
+When `OXEN_API_KEY` is set, training data uploads automatically:
+
+```bash
+export OXEN_API_KEY=your_key
+./run.sh run mars_mission_portal
+```
+
+Pro creates a versioned dataset with:
+- Training JSONL
+- Metadata JSON
+- Entity tensors
+- Causal graph
+
+## Training Data Quality
+
+SNAG training data is uniquely rich:
+
+1. **Causal ancestry**: Every example includes full causal chain
+2. **Provenance tracking**: Knowledge sources explicitly labeled
+3. **Temporal consistency**: States evolve coherently across time
+4. **Counterfactuals**: BRANCHING mode generates alternative paths
+5. **Quantitative state**: Emotional valence, arousal, energy, confidence
+
+## Example: Mars Mission Portal
+
+From [EXAMPLE_RUN.md](https://github.com/timepoint-ai/timepoint-pro/blob/main/EXAMPLE_RUN.md):
+
+- **Template**: `mars_mission_portal`
+- **Training examples**: 20
+- **Temporal mode**: PORTAL (backward inference)
+- **Timespan**: 2031 → 2026 (5 years)
+- **Entities**: 4 crew members
+- **Dialog turns**: 78
+- **Cost**: $0.18
+
+Each training example includes:
+- Full causal chain from 2026 to failure in 2031
+- Knowledge provenance (who learned what, when)
+- Emotional arcs (Lin Zhang: valence -0.20, arousal 0.94)
+- Relationship evolution (tensions between engineers and director)
+
+## See Also
+
+- [TDF Format](/export/tdf) - Timepoint Data Format
+- [SQLite Export](/export/sqlite) - Queryable database
+- [Training Data & Model Licensing](https://github.com/timepoint-ai/timepoint-pro#training-data--model-licensing)
+- [Sample Training Data](https://github.com/timepoint-ai/timepoint-pro/blob/main/examples/sample_training_data.jsonl)

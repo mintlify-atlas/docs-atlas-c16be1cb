@@ -1,0 +1,268 @@
+---
+title: 'Authentication'
+description: 'API key authentication for Timepoint Pro'
+---
+
+## Overview
+
+Timepoint Pro uses API key authentication with the `X-API-Key` header. All API endpoints require a valid API key that maps to a user account.
+
+## API Key Format
+
+API keys are prefixed with `tp_` followed by 32 hexadecimal characters:
+
+```
+tp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```
+
+## Authentication Header
+
+Include your API key in the `X-API-Key` header with every request:
+
+```bash
+curl -H "X-API-Key: tp_your_api_key_here" \
+  http://localhost:8080/tensors
+```
+
+## Creating API Keys
+
+API keys are created and managed through the key generation system:
+
+```python
+from api.auth import create_api_key
+
+# Create a new API key
+api_key = create_api_key(
+    user_id="user-123",
+    name="Production Key"
+)
+
+print(f"Your API key: {api_key}")
+# Output: tp_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+```
+
+<Warning>
+API keys are only shown once upon creation. Store them securely - they cannot be retrieved later.
+</Warning>
+
+## API Key Storage
+
+API keys are hashed using SHA-256 before storage. Only the hash is stored in the database, never the plain text key.
+
+```python
+from api.auth import hash_api_key, verify_api_key
+
+# Keys are automatically hashed on creation
+key_hash = hash_api_key(api_key)
+
+# Verification compares hashes
+user_id = verify_api_key(api_key)
+```
+
+## API Key Properties
+
+Each API key has the following properties:
+
+- **user_id**: The owner of the key
+- **name**: Friendly name for identification
+- **created_at**: When the key was created
+- **last_used**: Last successful authentication
+- **is_active**: Whether the key is enabled
+- **rate_limit**: Deprecated (now uses tier-based limits)
+
+## Managing API Keys
+
+### List Your Keys
+
+```python
+from api.auth import list_user_api_keys
+
+keys = list_user_api_keys("user-123")
+for key in keys:
+    print(f"{key['name']}: Last used {key['last_used']}")
+```
+
+### Revoke a Key
+
+```python
+from api.auth import revoke_api_key
+
+# Disable a key (cannot be re-enabled)
+revoked = revoke_api_key(api_key)
+```
+
+<Warning>
+Revoked keys cannot be re-enabled. Create a new key if needed.
+</Warning>
+
+## Authentication Errors
+
+### Missing API Key
+
+**Status**: `401 Unauthorized`
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Missing API key"
+}
+```
+
+**Headers**:
+```
+WWW-Authenticate: ApiKey header=X-API-Key
+```
+
+### Invalid API Key
+
+**Status**: `401 Unauthorized`
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+```
+
+### Example cURL Request
+
+```bash
+curl -X GET http://localhost:8080/tensors \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json"
+```
+
+### Example Python Request
+
+```python
+import requests
+
+api_key = "tp_your_api_key_here"
+base_url = "http://localhost:8080"
+
+headers = {
+    "X-API-Key": api_key,
+    "Content-Type": "application/json"
+}
+
+response = requests.get(f"{base_url}/tensors", headers=headers)
+print(response.json())
+```
+
+### Example JavaScript Request
+
+```javascript
+const apiKey = 'tp_your_api_key_here';
+const baseUrl = 'http://localhost:8080';
+
+const response = await fetch(`${baseUrl}/tensors`, {
+  headers: {
+    'X-API-Key': apiKey,
+    'Content-Type': 'application/json'
+  }
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+## Security Best Practices
+
+### Do:
+
+- Store API keys in environment variables
+- Use separate keys for development and production
+- Rotate keys periodically
+- Revoke unused keys
+- Use HTTPS in production
+
+### Don't:
+
+- Commit API keys to version control
+- Share keys between team members
+- Log API keys in application logs
+- Include keys in client-side code
+- Use the same key across multiple applications
+
+## Environment Variables
+
+Store your API key securely:
+
+```bash
+# .env file (add to .gitignore)
+TIMEPOINT_API_KEY=tp_your_api_key_here
+TIMEPOINT_API_URL=http://localhost:8080
+```
+
+Load in your application:
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+api_key = os.getenv("TIMEPOINT_API_KEY")
+api_url = os.getenv("TIMEPOINT_API_URL")
+```
+
+## FastAPI Dependency
+
+The API uses FastAPI dependencies for authentication:
+
+```python
+from fastapi import Depends
+from api.auth import get_current_user
+
+@router.get("/protected")
+async def protected_endpoint(
+    user_id: str = Depends(get_current_user)
+):
+    return {"user_id": user_id}
+```
+
+### Optional Authentication
+
+Some endpoints support optional authentication:
+
+```python
+from api.auth import get_optional_user
+
+@router.get("/public")
+async def public_endpoint(
+    user_id: str | None = Depends(get_optional_user)
+):
+    # user_id is None if no API key provided
+    return {"authenticated": user_id is not None}
+```
+
+## Testing
+
+Create test API keys for development:
+
+```python
+from api.auth import setup_test_api_keys, clear_api_keys
+
+# Create test keys
+test_keys = setup_test_api_keys()
+print(test_keys)
+# {
+#   'test-user-alice': 'tp_...',
+#   'test-user-bob': 'tp_...',
+#   'test-user-admin': 'tp_...'
+# }
+
+# Clean up (for testing only)
+clear_api_keys()
+```
+
+## Rate Limiting by Tier
+
+Your API key is associated with a subscription tier that determines rate limits:
+
+- **Free**: 10 requests/minute
+- **Basic**: 60 requests/minute
+- **Pro**: 300 requests/minute
+- **Enterprise**: 1,000 requests/minute
+
+See [API Overview](/api/overview#rate-limiting) for complete rate limit details.

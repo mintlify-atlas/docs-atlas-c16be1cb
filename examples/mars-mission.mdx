@@ -1,0 +1,356 @@
+---
+title: 'Mars Mission Portal'
+description: 'Trace the failure of the Ares III Mars mission backward through 5 years to its institutional origins'
+icon: 'rocket'
+---
+
+# Mars Mission Portal: Backward Reasoning from Disaster
+
+The **Ares III Mars Mission Portal** template demonstrates PORTAL mode temporal reasoning—working backward from a catastrophic outcome to discover its root causes. This flagship example shows how schedule pressure, institutional culture, and cascading technical debt can create an inevitable failure trajectory.
+
+<Info>
+**Template**: `mars_mission_portal` | **Mode**: PORTAL | **Cost**: ~$0.18 (quick) / ~$0.40 (full)
+</Info>
+
+## The Scenario
+
+The Ares III crewed Mars mission loses contact during orbital insertion in March 2031. Last telemetry shows cascading systems failures in life support and communications. The mission was celebrated as humanity's greatest achievement until silence fell.
+
+**PORTAL mode works backward** from this disaster through 5 years (or 10 in full mode) to January 2026, exploring how present-day decisions create future outcomes.
+
+### Cast of Characters
+
+<CardGroup cols={2}>
+  <Card title="Sarah Okafor" icon="user-astronaut">
+    **Mission Commander**
+    
+    Experienced astronaut, politically pressured by NASA leadership to maintain schedule. Mediates between engineering rigor and institutional pressure.
+    
+    Final state: Valence +0.47, Arousal 0.57, Energy 124.4
+  </Card>
+  
+  <Card title="Lin Zhang" icon="wrench">
+    **Systems Engineer**
+    
+    Detected ALSS anomalies during testing but was overruled by schedule pressure. Data-driven, escalating urgency.
+    
+    Final state: Valence -0.20, Arousal 0.94, Energy 116.7
+  </Card>
+  
+  <Card title="Raj Mehta" icon="laptop-code">
+    **Flight Engineer**
+    
+    Brilliant systems analyst, conflict-averse personality. Detects problems early but hesitates to escalate.
+    
+    Final state: Valence -0.20, Arousal 0.81, Energy 123.7
+  </Card>
+  
+  <Card title="Thomas Webb" icon="briefcase">
+    **Mission Director**
+    
+    Prioritized schedule and budget over safety margins. Made key decisions to reduce crew size and accept simplified life support.
+    
+    Final state: Valence -0.17, Arousal 0.78, Energy 118.4
+  </Card>
+</CardGroup>
+
+## Running the Simulation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/timepoint-ai/timepoint-pro.git
+    cd timepoint-pro
+    pip install -r requirements.txt
+    ```
+  </Step>
+  
+  <Step title="Set your API key">
+    ```bash
+    export OPENROUTER_API_KEY=your_key_here
+    ```
+  </Step>
+  
+  <Step title="Run the simulation">
+    ```bash
+    # Quick mode: 5 backward steps (~$0.18, 44 minutes)
+    ./run.sh run mars_mission_portal --portal-quick
+    
+    # Full depth: 10 backward steps (~$0.40, 103 minutes)
+    ./run.sh run mars_mission_portal
+    ```
+  </Step>
+</Steps>
+
+## Output Artifacts
+
+The simulation generates rich, queryable outputs across multiple formats:
+
+<Tabs>
+  <Tab title="Dialogs">
+    **6 conversations, 78 dialog turns** (quick mode)
+    
+    Each timepoint produces a multi-party dialog with per-character generation:
+    
+    ```
+    Timepoint 2 — 2029 — Oxygen Generator Flaw
+    
+    Lin Zhang: Thomas, I've been going over the oxygen generator 
+               test results and I think we have a problem.
+    
+    Thomas Webb: What makes you think that, Lin?
+    
+    Lin Zhang: The oxygen generator's CO2 scrubbing efficiency is 
+               30% lower than expected, and I'm seeing some anomalies 
+               in the pressure regulator's performance data, it's not 
+               just a minor deviation, Thomas.
+    ```
+    
+    - Voice distinctiveness: 0.91-0.97 across all entity pairs
+    - Independent LLM calls per character with persona-derived parameters
+    - Fourth Wall context: back layer shapes voice, front layer provides content
+  </Tab>
+  
+  <Tab title="Causal Graph">
+    **Backward timeline from 2031 → 2026**
+    
+    ```
+    Step 0 (2031): Mission failure during orbital insertion
+    Step 1 (2030): Raj patches comm anomalies; Webb reduces bandwidth
+    Step 2 (2029): Lin discovers O2 generator design flaw (30% efficiency loss)
+    Step 3 (2028): O2 generator at 92%; Lin demands redesign; Webb pushes back
+    Step 4 (2027): Lin finds 30% failure probability; proposes redundant system
+    Step 5 (2026): Origin: O2 generator pressure fluctuations first detected
+    ```
+    
+    Each backward step selected from 3 candidates scored by 405B judge model.
+  </Tab>
+  
+  <Tab title="Entity States">
+    **Final cognitive tensors** (after 6 timepoints):
+    
+    ```json
+    {
+      "lin_zhang": {
+        "emotional_valence": -0.20,
+        "emotional_arousal": 0.94,
+        "energy_budget": 116.7,
+        "initial_knowledge": [
+          "ALSS design specifications",
+          "O2 generator test results",
+          "System redundancy architecture"
+        ]
+      }
+    }
+    ```
+    
+    Lin Zhang's high arousal (0.94) and negative valence reflect sustained frustration from having technical warnings dismissed.
+  </Tab>
+  
+  <Tab title="Training Data">
+    **20 structured training examples** (prompt/completion pairs)
+    
+    Each example includes:
+    - M7 Causal History: Timeline leading to current moment
+    - M13 Relationship Context: Trust/alignment with other entities
+    - M3 Knowledge Provenance: Source and confidence of each knowledge item
+    - M6 Entity State: Energy, valence, arousal, behavior vectors
+    
+    Example structure:
+    ```
+    === CAUSAL HISTORY (M7) ===
+    Timeline leading to current moment (3 events):
+      tp_000_2031: Mission failure during orbital insertion...
+      tp_001_2030: Raj patches comm anomalies, Webb reduces bandwidth...
+      tp_002_2029: Lin discovers oxygen generator design flaw...
+    
+    === PREDICTION TASK ===
+    Predict: new knowledge, energy change, emotional impact, causal reasoning.
+    ```
+  </Tab>
+</Tabs>
+
+## Key Insights from Example Run
+
+<Warning>
+Run ID: `run_20260218_091456_55697771` | Cost: $0.18 | Duration: 44 min | 479 LLM calls | 318K tokens
+</Warning>
+
+### The Causal Chain Reveals Structural Failure
+
+Schedule pressure emerges as the dominant institutional failure mode:
+
+1. **2026**: Lin detects O2 generator pressure fluctuations and overheating
+2. **2027**: Lin finds 30% failure probability; proposes redundant system with existing components
+3. **2028**: O2 generator at 92% efficiency; Lin pushes for redesign; Webb demands schedule adherence
+4. **2029**: Lin discovers 30% CO2 scrubbing efficiency loss; Webb dismisses for schedule
+5. **2030**: Raj patches around comm anomalies; Webb reduces bandwidth over Lin's objections
+6. **2031**: Mission failure
+
+Lin's oxygen generator concerns appear at **every timepoint** and are dismissed or deferred each time by Webb's schedule-first culture.
+
+### Emotional Arc Analysis
+
+**Lin Zhang** has the highest arousal (0.94) in the cast—the most activated character. Her negative valence (-0.20) combined with near-maximum arousal drives repeated confrontations with Webb, citing specific data:
+- 30% CO2 scrubbing efficiency loss
+- 30% failure probability  
+- 10% pressure variance
+- 5-degree hourly temperature spikes
+
+Her energy (116.7, lowest in cast) reflects the draining cost of being the persistent technical conscience.
+
+### ADPRS Waveform Gating
+
+24 evaluations, 8 divergent (33.33%). Sarah Okafor and Thomas Webb both hit the φ ceiling (1.0) at timepoints tp_000 through tp_003, mapping them to `trained` band, but they actually resolve at `dialog`. This is **soft budget mode working as intended**—spending enough to maintain quality without escalating to the highest tier.
+
+## Template Configuration
+
+Here's the actual template JSON (excerpt):
+
+```json
+{
+  "scenario_description": "PORTAL backward reasoning from a failed crewed Mars mission in 2031...",
+  "world_id": "mars_mission_portal",
+  "entities": {
+    "count": 4,
+    "types": ["human"],
+    "initial_resolution": "trained"
+  },
+  "timepoints": {
+    "count": 10,
+    "resolution": "month"
+  },
+  "temporal": {
+    "mode": "portal",
+    "portal_year": 2031,
+    "origin_year": 2026,
+    "backward_steps": 10,
+    "candidate_antecedents_per_step": 3,
+    "path_count": 5,
+    "coherence_threshold": 0.7,
+    "use_simulation_judging": true,
+    "judge_model": "meta-llama/llama-3.1-405b-instruct"
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M17_modal_temporal_causality_portal",
+      "M3_causal_attribution",
+      "M7_emotional_state",
+      "M8_embodied_states",
+      "M11_dialog_synthesis",
+      "M13_relationship_tracking"
+    ]
+  }
+}
+```
+
+## Mechanisms in Action
+
+<AccordionGroup>
+  <Accordion title="M17: Portal Backward Inference" icon="arrow-left">
+    Generates 3 candidate antecedent states per step, scores each with 405B judge model (direct state scoring, no mini forward-simulations), selects the most coherent backward chain.
+    
+    ```
+    Known endpoint (2031): Mission failure
+                    |
+        Generate 3 candidate causes
+        Score each candidate with 405B judge
+        Select best candidate
+                    |
+            Step back 1 year
+            Repeat 10 times (or 5 with --portal-quick)
+                    |
+    Result: Causal chain from Jan 2026 -> 2031
+    ```
+  </Accordion>
+  
+  <Accordion title="M3: Knowledge Provenance" icon="brain">
+    Every fact an entity knows has a tracked exposure event with source, timestamp, and confidence score.
+    
+    Example exposure chain:
+    ```
+    [pre_tp_000] sarah_okafor <- scene_initialization (conf=1.0):
+      "Ares III mission objectives"
+      "Crew member skills and expertise"
+      "NASA mission protocols"
+    ```
+    
+    In PORTAL mode, front-layer knowledge is filtered by causal ancestry so characters only reference information from timepoints upstream of their position.
+  </Accordion>
+  
+  <Accordion title="M11: Per-Character Dialog Synthesis" icon="messages">
+    Each conversation generated through LangGraph steering loop:
+    
+    1. **Steering agent** selects next speaker based on narrative goals
+    2. **Character agent** generates ONE turn using PersonaParams derived from tensor state (arousal → temperature, energy → max_tokens)
+    3. **Quality gate** evaluates after each turn
+    4. Loop continues until steering agent ends dialog
+    
+    Voice distinctiveness scores: 0.91-0.97 across all entity pairs.
+  </Accordion>
+  
+  <Accordion title="M13: Relationship Tracking" icon="people-arrows">
+    Relationships evolve across timepoints with trust and alignment values:
+    
+    ```json
+    {
+      "raj_mehta -> thomas_webb": {
+        "type": "tense",
+        "trust": 0.40,
+        "alignment": 0.30
+      },
+      "lin_zhang -> sarah_okafor": {
+        "type": "collaborative",
+        "trust": 0.65,
+        "alignment": 0.55
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Cost Comparison: Quick vs. Full Mode
+
+| Metric | Full Run | Quick Run | Change |
+|--------|----------|-----------|--------|
+| Cost | $0.49 | $0.18 | -63% |
+| LLM calls | 912 | 479 | -47% |
+| Tokens | 900K | 318K | -65% |
+| Backward steps | 10 | 5 | -50% |
+| Timepoints | 11 | 6 | -45% |
+| Dialogs / turns | 11 / 143 | 6 / 78 | -45% |
+| Training examples | 40 | 20 | -50% |
+| Duration | ~103 min | ~44 min | -57% |
+
+The `--portal-quick` flag is designed for fast demos and iteration while maintaining the same per-step quality.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Convergence Testing" icon="rotate" href="#">
+    ```bash
+    ./run.sh convergence e2e mars_mission_portal
+    ```
+    Run 3x and analyze causal graph stability
+  </Card>
+  
+  <Card title="Export to Formats" icon="file-export" href="#">
+    ```bash
+    ./run.sh export last --format jsonl
+    ./run.sh export last --format fountain
+    ```
+    Training data or screenplay formats
+  </Card>
+  
+  <Card title="Try Other Templates" icon="grid" href="/examples/castaway-colony">
+    Explore the full-mechanism showcase with branching survival strategies
+  </Card>
+  
+  <Card title="Create Custom Scenario" icon="pen-to-square" href="/examples/custom-scenario">
+    Learn to build your own PORTAL scenario from scratch
+  </Card>
+</CardGroup>
+
+<Note>
+**Model Licensing**: This example run used Llama models. Meta's license restricts using Llama outputs to train non-Llama models. For training data generation, use DeepSeek (MIT) or Mistral (Apache 2.0): `./run.sh run --model deepseek/deepseek-r1 mars_mission_portal`
+</Note>

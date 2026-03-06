@@ -1,0 +1,164 @@
+---
+title: 'API Overview'
+description: 'Introduction to the Timepoint Pro API'
+---
+
+## Introduction
+
+The Timepoint Pro API is a FastAPI-based RESTful service that provides access to cognitive tensors, semantic search, and simulation management capabilities.
+
+## Base URL
+
+```
+http://localhost:8080
+```
+
+For production environments, the base URL will be provided by your deployment configuration.
+
+## API Version
+
+Current API version: **1.0.0**
+
+## Core Features
+
+- **Tensor CRUD**: Create, read, update, and delete cognitive tensors
+- **Semantic Search**: Natural language search over tensor descriptions using RAG
+- **Permission Control**: Private, shared, and public access levels
+- **Tensor Composition**: Combine multiple tensors using various methods
+- **Simulation Jobs**: Create and manage simulation jobs with templates
+- **Batch Submission**: Submit multiple simulations in a single request
+- **Usage Quotas**: Track and enforce monthly usage limits per tier
+
+## Authentication
+
+All API endpoints require authentication using an API key passed in the `X-API-Key` header. See the [Authentication](/api/authentication) page for details.
+
+## Rate Limiting
+
+The API enforces rate limits based on your subscription tier:
+
+| Tier | Requests/Minute | Requests/Hour | Burst (Requests/Second) | Concurrent Jobs |
+|------|----------------|---------------|------------------------|------------------|
+| Free | 10 | 100 | 2 | 1 |
+| Basic | 60 | 1,000 | 5 | 3 |
+| Pro | 300 | 10,000 | 20 | 10 |
+| Enterprise | 1,000 | 100,000 | 50 | Unlimited |
+
+When you exceed rate limits, you'll receive a `429 Too Many Requests` response with `Retry-After` headers.
+
+### Rate Limit Response
+
+```json
+{
+  "error": "RateLimitExceeded",
+  "message": "Rate limit exceeded: 10 per minute",
+  "tier": "free",
+  "limits": {
+    "requests_per_minute": 10,
+    "requests_per_hour": 100,
+    "concurrent_jobs": 1
+  },
+  "retry_after": 60
+}
+```
+
+## Usage Quotas
+
+Monthly usage quotas are enforced per tier:
+
+| Tier | API Calls | Simulations | Monthly Cost | Max Batch Size |
+|------|-----------|------------|--------------|----------------|
+| Free | 1,000 | 10 | $1.00 | 5 |
+| Basic | 10,000 | 100 | $10.00 | 20 |
+| Pro | 100,000 | 1,000 | $100.00 | 50 |
+| Enterprise | Unlimited | Unlimited | Unlimited | 100 |
+
+Check your current usage at `GET /simulations/batch/usage`.
+
+### Quota Exceeded Response
+
+```json
+{
+  "error": "QuotaExceeded",
+  "message": "Monthly quota exceeded",
+  "tier": "free",
+  "period": "2026-03",
+  "days_remaining": 15,
+  "usage": {
+    "api_calls": 1000,
+    "simulations": 10,
+    "cost_usd": 1.00
+  },
+  "limits": {
+    "api_calls": 1000,
+    "simulations": 10,
+    "cost_usd": 1.00
+  }
+}
+```
+
+## Health Check
+
+Check API status and database health:
+
+```bash
+curl http://localhost:8080/health
+```
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2026-03-06T12:00:00Z",
+  "database": "healthy",
+  "tensor_count": 42,
+  "rate_limiting": true
+}
+```
+
+## Error Responses
+
+All errors follow a consistent format:
+
+```json
+{
+  "error": "ErrorType",
+  "message": "Human-readable error message",
+  "detail": {},
+  "request_id": "uuid-for-debugging"
+}
+```
+
+### Common HTTP Status Codes
+
+- `200 OK` - Request succeeded
+- `201 Created` - Resource created successfully
+- `202 Accepted` - Request accepted (async operation)
+- `204 No Content` - Request succeeded with no response body
+- `400 Bad Request` - Invalid request parameters
+- `401 Unauthorized` - Missing or invalid API key
+- `403 Forbidden` - Insufficient permissions
+- `404 Not Found` - Resource not found
+- `409 Conflict` - Resource already exists
+- `429 Too Many Requests` - Rate limit or quota exceeded
+- `500 Internal Server Error` - Server error
+- `503 Service Unavailable` - Service temporarily unavailable
+
+## CORS
+
+The API supports Cross-Origin Resource Sharing (CORS). Configure allowed origins using the `CORS_ORIGINS` environment variable (comma-separated list).
+
+## API Documentation
+
+Interactive API documentation is available at:
+
+- **Swagger UI**: `http://localhost:8080/docs`
+- **ReDoc**: `http://localhost:8080/redoc`
+
+## Next Steps
+
+- [Authentication](/api/authentication) - Set up API keys
+- [Tensors](/api/tensors) - Work with cognitive tensors
+- [Search](/api/search) - Semantic search and composition
+- [Simulations](/api/simulations) - Run simulation jobs
+- [Batch](/api/batch) - Submit batch simulations

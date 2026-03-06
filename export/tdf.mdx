@@ -1,0 +1,216 @@
+---
+title: 'TDF (Timepoint Data Format)'
+description: 'JSON-LD export format for Timepoint Suite interoperability'
+---
+
+## Overview
+
+The Timepoint Data Format (TDF) is the canonical JSON-LD format for exporting simulation data across the entire Timepoint Suite. TDF records contain entities, dialogs, causal edges, and metadata in a structured, validated format.
+
+Timepoint Pro uses the official [`timepoint-tdf`](https://github.com/timepoint-ai/timepoint-tdf) package to ensure wire format consistency across Flash, Pro, Clockchain, SNAG-Bench, and Proteus.
+
+## Export via `from_pro()`
+
+The `from_pro()` function converts Pro simulation output into a TDF record:
+
+```python
+from timepoint_tdf import from_pro, write_tdf_jsonl
+
+# Simulation data from Pro
+data = {
+    "run_id": "run_20260306_123456",
+    "entities": [...],
+    "dialogs": [...],
+    "causal_edges": [...],
+    "metadata": {...},
+    "timestamp": "2026-03-06T12:34:56Z"
+}
+
+# Convert to TDF record
+record = from_pro(data)
+
+# Write to JSONL file
+write_tdf_jsonl([record], "output.tdf.jsonl")
+```
+
+## TDF Record Structure
+
+A TDF record contains four primary fields:
+
+### 1. Entities
+
+Entity data includes cognitive state, physical state, and resolution level:
+
+```json
+{
+  "entities": [
+    {
+      "entity_id": "sarah_okafor",
+      "entity_type": "human",
+      "timepoint": "tp_000_2031",
+      "resolution_level": "dialog",
+      "entity_metadata": {
+        "cognitive_tensor": {
+          "emotional_valence": 0.47,
+          "emotional_arousal": 0.57,
+          "energy_budget": 124.4,
+          "decision_confidence": 0.8
+        },
+        "physical_tensor": {
+          "age": 35.0,
+          "health_status": 1.0,
+          "mobility": 1.0
+        }
+      },
+      "eigenvector_centrality": 0.42,
+      "training_count": 3
+    }
+  ]
+}
+```
+
+### 2. Dialogs
+
+Dialog turns with speaker, content, timestamp, and emotional tone:
+
+```json
+{
+  "dialogs": [
+    {
+      "dialog_id": "dialog_tp_000_2031",
+      "timepoint_id": "tp_000_2031",
+      "participants": ["sarah_okafor", "raj_mehta"],
+      "turns": [
+        {
+          "speaker": "sarah_okafor",
+          "content": "We need to address the oxygen generator issue.",
+          "timestamp": "2031-01-15T14:30:00Z",
+          "emotional_tone": "concerned",
+          "confidence": 0.9
+        }
+      ],
+      "duration_seconds": 180,
+      "information_transfer_count": 5
+    }
+  ]
+}
+```
+
+### 3. Causal Edges
+
+Causal relationships between timepoints:
+
+```json
+{
+  "causal_edges": [
+    {
+      "source": "tp_005_2026",
+      "target": "tp_004_2027",
+      "edge_type": "causal_necessity",
+      "weight": 0.85,
+      "description": "O2 generator pressure fluctuations detected"
+    }
+  ]
+}
+```
+
+### 4. Metadata
+
+Simulation run metadata:
+
+```json
+{
+  "metadata": {
+    "world_id": "mars_mission_portal",
+    "temporal_mode": "portal",
+    "scenario_description": "Ares III mission failure backward inference",
+    "timepoint_count": 6,
+    "entity_count": 4,
+    "dialog_turns": 78,
+    "cost_usd": 0.18,
+    "tokens_used": 318000,
+    "llm_calls": 479,
+    "mechanisms_fired": ["M1", "M3", "M6", "M7", "M10", "M11", "M13", "M17"],
+    "generated_at": "2026-03-06T12:34:56Z"
+  }
+}
+```
+
+## Using ExportFormatFactory
+
+Timepoint Pro's `ExportFormatFactory` provides a unified interface:
+
+```python
+from reporting.export_formats import ExportFormatFactory
+
+# Create TDF exporter
+exporter = ExportFormatFactory.create("tdf")
+
+# Export simulation data
+exporter.export(data, "output.tdf.jsonl")
+```
+
+## API Endpoint
+
+The `/api/data-export/{run_id}` endpoint returns TDF payloads:
+
+```bash
+curl http://localhost:8000/api/data-export/run_20260306_123456
+```
+
+Response:
+```json
+{
+  "entities": [...],
+  "dialogs": [...],
+  "causal_edges": [...],
+  "metadata": {...}
+}
+```
+
+## Example: Mars Mission Portal
+
+From the [EXAMPLE_RUN.md](https://github.com/timepoint-ai/timepoint-pro/blob/main/EXAMPLE_RUN.md):
+
+- **Run ID**: `run_20260218_091456_55697771`
+- **Entities**: 4 humans (Sarah Okafor, Raj Mehta, Lin Zhang, Thomas Webb)
+- **Dialogs**: 6 conversations, 78 turns
+- **Causal chain**: 5-year backward inference (2031 → 2026)
+- **Training examples**: 20 prompt/completion pairs
+- **Cost**: $0.18, 479 LLM calls, 318K tokens
+
+TDF export includes:
+- Full entity tensors with emotional arcs
+- All dialog turns with knowledge references
+- Causal edges showing schedule pressure propagation
+- PORTAL mode metadata with coherence scores
+
+## TDF in the Timepoint Suite
+
+| Service | TDF Role |
+|---------|----------|
+| **Pro** | Generates TDF from simulations via `from_pro()` |
+| **Flash** | Renders historical moments as TDF |
+| **Clockchain** | Stores and queries TDF records |
+| **SNAG-Bench** | Evaluates TDF quality (Causal Resolution) |
+| **Proteus** | Validates TDF predictions against reality |
+
+## Compression
+
+TDF exports support gzip and bz2 compression:
+
+```python
+exporter = ExportFormatFactory.create("tdf", compression="gzip")
+exporter.export(data, "output.tdf.jsonl")  # Creates output.tdf.jsonl.gz
+```
+
+## Schema Validation
+
+The `timepoint-tdf` package validates all records against the canonical JSON-LD schema. Invalid records are rejected with detailed error messages.
+
+## See Also
+
+- [JSONL Training Data](/export/jsonl) - ML training format
+- [SQLite Export](/export/sqlite) - Queryable database
+- [Fountain Export](/export/fountain) - Screenplay format
+- [README: TDF Integration](https://github.com/timepoint-ai/timepoint-pro#changes-2026-03-02--tdf-package-integration--branch-protection)

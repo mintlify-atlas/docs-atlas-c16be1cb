@@ -1,0 +1,634 @@
+---
+title: 'Docker Setup'
+description: 'Container-based development and deployment with devcontainer support'
+---
+
+## Overview
+
+Timepoint Pro includes a production-ready Dockerfile based on Anthropic's official devcontainer pattern. This setup provides a consistent development environment with Python 3.10, Node.js 20, and Claude Code integration.
+
+## Dockerfile
+
+The `.devcontainer/Dockerfile` is based on `python:3.10-bookworm` with Claude Code dependencies:
+
+```dockerfile
+# Timepoint Pro - Claude Code Sandbox Container
+# Based on Anthropic's official devcontainer pattern:
+# https://github.com/anthropics/claude-code/blob/main/.devcontainer/Dockerfile
+
+FROM python:3.10-bookworm
+
+ARG TZ
+ENV TZ="${TZ:-America/Los_Angeles}"
+
+ARG CLAUDE_CODE_VERSION=latest
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
+# Install system packages: dev tools, firewall, and Claude Code dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  less git procps sudo fzf zsh man-db unzip gnupg2 \
+  iptables ipset iproute2 dnsutils aggregate jq nano vim \
+  curl wget build-essential libffi-dev libsqlite3-dev \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 LTS (required for Claude Code)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update && apt-get install -y gh && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create claude user matching host UID/GID for bind mount compatibility
+RUN groupadd -g ${HOST_GID} claude 2>/dev/null || true && \
+    useradd -m -u ${HOST_UID} -g ${HOST_GID} -s /bin/zsh claude 2>/dev/null || true && \
+    echo "claude ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/claude && \
+    chmod 0440 /etc/sudoers.d/claude
+
+# Ensure npm global dir is accessible
+RUN mkdir -p /usr/local/share/npm-global && \
+    chown -R ${HOST_UID}:${HOST_GID} /usr/local/share/npm-global
+
+# Persist shell history
+RUN mkdir -p /commandhistory && \
+    touch /commandhistory/.bash_history && \
+    chown -R ${HOST_UID}:${HOST_GID} /commandhistory
+
+ENV DEVCONTAINER=true
+
+# Install Claude Code (as root, globally)
+ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
+ENV PATH=$PATH:/usr/local/share/npm-global/bin
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+
+# Install Poetry for Python dependency management
+RUN pip install --no-cache-dir poetry
+
+# Install git-delta for better diffs
+ARG GIT_DELTA_VERSION=0.18.2
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget -q "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+    dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+    rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
+
+# Copy and configure firewall script
+COPY init-firewall.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/init-firewall.sh && \
+    echo "claude ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/claude-firewall && \
+    chmod 0440 /etc/sudoers.d/claude-firewall
+
+# Switch to non-root user
+USER claude
+
+# Set shell defaults
+ENV SHELL=/bin/zsh
+ENV EDITOR=nano
+ENV VISUAL=nano
+ENV PROMPT_COMMAND='history -a'
+ENV HISTFILE=/commandhistory/.bash_history
+
+# Ensure python3.10 symlink exists
+RUN if [ ! -f /usr/local/bin/python3.10 ]; then \
+      sudo ln -sf /usr/local/bin/python3 /usr/local/bin/python3.10; \
+    fi
+
+# Default working directory
+WORKDIR /workspace
+
+# Health check: verify Claude Code and Python are available
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD claude --version > /dev/null 2>&1 && python3.10 --version > /dev/null 2>&1
+```
+
+## Devcontainer Configuration
+
+The `.devcontainer/devcontainer.json` configures VS Code integration:
+
+```json
+{
+  "name": "Timepoint Pro - Claude Code Sandbox",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "${localEnv:TZ:America/Los_Angeles}",
+      "CLAUDE_CODE_VERSION": "latest",
+      "HOST_UID": "1000",
+      "HOST_GID": "1000",
+      "GIT_DELTA_VERSION": "0.18.2"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3.10",
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+  "remoteUser": "claude",
+  "mounts": [
+    "source=pro-bashhistory-${devcontainerId},target=/commandhistory,type=volume"
+  ],
+  "containerEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind,consistency=delegated",
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "waitFor": "postStartCommand"
+}
+```
+
+## Docker Compose (Production)
+
+For production deployments with Postgres and Redis:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: timepoint_pro
+      POSTGRES_USER: timepoint
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timepoint"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8080 --workers 4
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - DATABASE_URL=postgresql://timepoint:${POSTGRES_PASSWORD}@postgres:5432/timepoint_pro
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - API_KEY_SALT=${API_KEY_SALT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./exports:/workspace/exports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    command: celery -A tasks worker --loglevel=info --concurrency=4
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - DATABASE_URL=postgresql://timepoint:${POSTGRES_PASSWORD}@postgres:5432/timepoint_pro
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./exports:/workspace/exports
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+## Environment Variables
+
+### Core Engine (.env)
+
+```bash
+# Required: OpenRouter API Key
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Optional: Groq for ultra-fast inference
+GROQ_API_KEY=gsk_...
+
+# LLM Service
+LLM_SERVICE_ENABLED=true
+LLM_MODEL=meta-llama/llama-3.1-70b-instruct
+
+# Database (SQLite for local, Postgres for production)
+DATABASE_URL=sqlite:///metadata/runs.db
+# DATABASE_URL=postgresql://user:pass@postgres:5432/timepoint_pro
+```
+
+### Pro-Cloud Extensions (.env.production)
+
+```bash
+# Database
+DATABASE_URL=postgresql://timepoint:${POSTGRES_PASSWORD}@postgres:5432/timepoint_pro
+POSTGRES_PASSWORD=your-secure-password-here
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+# JWT Auth
+JWT_SECRET_KEY=your-secret-key-here
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# API Keys
+API_KEY_SALT=your-salt-here
+
+# Budget
+DEFAULT_USER_BUDGET_USD=10.00
+BUDGET_CHECK_ENABLED=true
+
+# Optional: Billing forwarding
+BILLING_SERVICE_URL=https://billing.timepointai.com
+BILLING_SERVICE_TOKEN=your-billing-token
+```
+
+## Port Mappings
+
+### Default Ports
+
+```yaml
+services:
+  api:
+    ports:
+      - "8080:8080"    # FastAPI application
+  
+  postgres:
+    ports:
+      - "5432:5432"    # Postgres (internal only)
+  
+  redis:
+    ports:
+      - "6379:6379"    # Redis (internal only)
+```
+
+### Custom Port Configuration
+
+```bash
+# Override default port
+PORT=3000 docker-compose up
+
+# Or in docker-compose.yml
+services:
+  api:
+    environment:
+      - PORT=3000
+    ports:
+      - "3000:3000"
+```
+
+## Volume Mounts
+
+### Development Volumes
+
+```yaml
+volumes:
+  # Persist command history
+  - commandhistory:/commandhistory
+  
+  # Bind mount source code
+  - ./:/workspace:delegated
+  
+  # Export artifacts
+  - ./exports:/workspace/exports
+```
+
+### Production Volumes
+
+```yaml
+volumes:
+  # Postgres data persistence
+  postgres_data:
+    driver: local
+  
+  # Redis data persistence
+  redis_data:
+    driver: local
+  
+  # Export artifacts (shared across API and worker)
+  exports:
+    driver: local
+```
+
+## Running with Docker
+
+### Local Development (Devcontainer)
+
+```bash
+# Open in VS Code
+code .
+
+# VS Code will prompt: "Reopen in Container"
+# Or use Command Palette: "Dev Containers: Reopen in Container"
+
+# Once inside container:
+./run.sh quick
+```
+
+### Standalone Container
+
+```bash
+# Build image
+docker build -t timepoint-pro -f .devcontainer/Dockerfile .
+
+# Run container
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -e OPENROUTER_API_KEY=sk-or-v1-... \
+  timepoint-pro \
+  ./run.sh quick
+```
+
+### Production with Docker Compose
+
+```bash
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f api
+docker-compose logs -f worker
+
+# Scale workers
+docker-compose up -d --scale worker=4
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+```
+
+## Database Initialization
+
+### Automatic Migration
+
+Add to API service:
+
+```yaml
+api:
+  command: >
+    bash -c "
+      python -c 'from sqlmodel import SQLModel, create_engine; from schemas import *; SQLModel.metadata.create_all(create_engine(os.getenv(\"DATABASE_URL\")))' &&
+      uvicorn api.main:app --host 0.0.0.0 --port 8080 --workers 4
+    "
+```
+
+Or use init container:
+
+```yaml
+init-db:
+  build:
+    context: .
+    dockerfile: .devcontainer/Dockerfile
+  command: python scripts/init_db.py
+  environment:
+    - DATABASE_URL=postgresql://timepoint:${POSTGRES_PASSWORD}@postgres:5432/timepoint_pro
+  depends_on:
+    postgres:
+      condition: service_healthy
+```
+
+## Health Checks
+
+### API Health Check
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+```
+
+### Worker Health Check
+
+```yaml
+healthcheck:
+  test: ["CMD", "celery", "-A", "tasks", "inspect", "ping"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+```
+
+## Networking
+
+### Internal Service Communication
+
+```yaml
+networks:
+  default:
+    name: timepoint-network
+    driver: bridge
+
+services:
+  api:
+    networks:
+      - default
+  
+  worker:
+    networks:
+      - default
+```
+
+Services can communicate via service name:
+
+```python
+# API can reach Redis at redis://redis:6379
+# Worker can reach Postgres at postgresql://timepoint:pass@postgres:5432/timepoint_pro
+```
+
+## Resource Limits
+
+```yaml
+services:
+  api:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+  
+  worker:
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+```
+
+## Logging
+
+### Container Logs
+
+```bash
+# View logs
+docker-compose logs api
+docker-compose logs worker
+
+# Follow logs
+docker-compose logs -f api
+
+# Last N lines
+docker-compose logs --tail=100 api
+```
+
+### Structured Logging
+
+```python
+import logging
+import json
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
+# Structured JSON logging for Docker
+logger.info(json.dumps({
+    'event': 'simulation_started',
+    'run_id': run_id,
+    'template': template_id,
+    'estimated_cost': 0.15
+}))
+```
+
+## Multi-Stage Builds (Optimization)
+
+```dockerfile
+# Build stage
+FROM python:3.10-bookworm AS builder
+
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Runtime stage
+FROM python:3.10-slim-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  libsqlite3-0 curl \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+WORKDIR /workspace
+COPY . .
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+## Security
+
+### Non-Root User
+
+Already configured in devcontainer Dockerfile:
+
+```dockerfile
+USER claude
+```
+
+### Secret Management
+
+```bash
+# Use Docker secrets (Swarm) or environment variables
+docker secret create openrouter_key openrouter_key.txt
+
+# In docker-compose.yml
+secrets:
+  openrouter_key:
+    external: true
+
+services:
+  api:
+    secrets:
+      - openrouter_key
+    environment:
+      - OPENROUTER_API_KEY_FILE=/run/secrets/openrouter_key
+```
+
+### Network Isolation
+
+```yaml
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true  # No external access
+
+services:
+  api:
+    networks:
+      - frontend
+      - backend
+  
+  postgres:
+    networks:
+      - backend  # Only accessible from backend network
+```
+
+## Next Steps
+
+- [Local Development](/deployment/local) - Run without Docker
+- [Pro-Cloud Architecture](/deployment/pro-cloud) - Production wrapper layer
+- [Railway Deployment](/deployment/railway) - Managed hosting with Railway

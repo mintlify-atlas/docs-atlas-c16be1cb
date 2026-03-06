@@ -1,0 +1,657 @@
+---
+title: 'Directorial Mode'
+description: 'Narrative-driven simulation with five-act structure, camera systems, and tension curves'
+icon: 'clapperboard'
+---
+
+## What is Directorial Mode?
+
+Directorial mode implements **narrative-driven temporal simulation**: events occur to serve dramatic beats rather than strict causal logic. The system plans a five-act structure, manages camera/POV rotation, tracks tension curves, and adjusts fidelity based on dramatic importance.
+
+Think of Directorial mode as **authorial causality**: the detective finds the crucial clue *when tension peaks*, not when logistics dictate.
+
+<Note>
+  **Core principle**: In Directorial mode, **narrative necessity** takes precedence over strict realism. Events happen because they serve the story arc.
+</Note>
+
+## When to Use Directorial Mode
+
+Use Directorial mode when:
+
+- **Story structure matters** - You want a satisfying narrative arc (setup → climax → resolution)
+- **Tension management** - Control pacing and dramatic intensity
+- **POV complexity** - Rotate perspective between characters for dramatic effect
+- **Training narrative AI** - Generate examples of well-structured storytelling
+- **Creative writing** - Explore dramatic scenarios with coherent arcs
+
+<CardGroup cols={2}>
+  <Card title="Perfect for" icon="film">
+    - Gothic mysteries (Hound of Baskervilles)
+    - Detective narratives
+    - Dramatic crisis scenarios
+    - Character-driven stories
+    - Narrative game design
+  </Card>
+  <Card title="Not ideal for" icon="xmark">
+    - Realistic simulations (use Forward)
+    - Root cause analysis (use Portal)
+    - Counterfactuals (use Branching)
+    - Cyclical patterns (use Cyclical)
+  </Card>
+</CardGroup>
+
+## How Directorial Mode Works
+
+<Steps>
+  <Step title="Plan Narrative Structure">
+    LLM generates a **five-act dramatic plan**:
+    - **Setup** (0-20%): Establish world, introduce characters
+    - **Rising** (20-50%): Tensions escalate, conflicts emerge
+    - **Climax** (50-70%): Central confrontation or crisis
+    - **Falling** (70-85%): Consequences unfold
+    - **Resolution** (85-100%): New equilibrium
+    
+    Plus: narrative beats, character arcs, central conflict, themes
+  </Step>
+
+  <Step title="Plan Tension Curve">
+    System generates **target tension** per step based on act:
+    - Setup: 0.2-0.4
+    - Rising: 0.4-0.7
+    - Climax: 0.8-1.0
+    - Falling: 0.5-0.3 (decreasing)
+    - Resolution: 0.1-0.2
+  </Step>
+
+  <Step title="Plan Camera/POV Schedule">
+    LLM plans **perspective rotation**:
+    - **POV entity**: Whose perspective for each act?
+    - **Framing**: wide, close, overhead, subjective, ensemble
+    - **Storyline threads**: A-plot, B-plot (if applicable)
+  </Step>
+
+  <Step title="Generate Directed Scenes">
+    At each step, LLM generates a scene with:
+    - **Act-aware prompting**: References current act and beat
+    - **Tension targeting**: Aims for programmatic tension target
+    - **POV framing**: Writes from specified character perspective
+    - **Dramatic importance**: Maps to resolution level (TRAINED for climax, SCENE for bridging)
+  </Step>
+
+  <Step title="Detect Dramatic Irony">
+    System identifies **audience-vs-character knowledge gaps**:
+    - What does the audience know that characters don't?
+    - Tracks irony entities and descriptions
+  </Step>
+
+  <Step title="Validate Narrative Coherence">
+    Paths are validated for:
+    - **Arc completion**: Do all five acts appear?
+    - **Tension fit**: Does actual tension match target curve?
+    - **POV coherence**: Does perspective rotation make sense?
+  </Step>
+</Steps>
+
+## Architecture
+
+Directorial mode is implemented in `workflows/directorial_strategy.py`:
+
+```python
+class DirectorialStrategy:
+    """
+    Narrative-driven temporal simulation strategy.
+    
+    Process:
+    1. Plan five-act narrative structure with beats and character arcs
+    2. Generate origin state with entity inference
+    3. Plan programmatic tension curve per act
+    4. Plan camera/POV schedule
+    5. Generate directed paths with act-aware prompting
+    6. Validate narrative coherence
+    7. Rank paths by composite score
+    8. Populate metadata (act boundaries, tension curves)
+    """
+    
+    def run(self) -> list[DirectorialPath]:
+        """
+        Execute directorial narrative simulation.
+        
+        Returns:
+            List of DirectorialPath objects with narrative metadata
+        """
+```
+
+### Key Data Structures
+
+```python
+@dataclass
+class DirectorialState:
+    """A state with arc and camera metadata"""
+    year: int
+    month: int
+    description: str
+    entities: list[Entity]
+    world_state: dict[str, Any]
+    
+    # Arc engine fields
+    act: ActPhase = ActPhase.SETUP  # setup, rising, climax, falling, resolution
+    act_position: float = 0.0  # 0.0-1.0 within act
+    tension_score: float = 0.3
+    tension_delta: float = 0.0
+    dramatic_irony: bool = False
+    irony_entities: list[str] = field(default_factory=list)
+    narrative_beat: str = ""
+    
+    # Camera fields
+    pov_entity: str = ""
+    framing: Framing = Framing.WIDE  # wide, close, overhead, subjective, ensemble
+    parallel_storyline: str = ""
+    focus_weight: float = 1.0
+    
+    # Fidelity mapping
+    dramatic_importance: float = 0.5  # 0.0-1.0, drives resolution level
+
+@dataclass
+class DirectorialPath:
+    """Complete narrative path"""
+    path_id: str
+    states: list[DirectorialState]
+    coherence_score: float
+    arc_completion_score: float = 0.0
+    tension_curve: list[float] = field(default_factory=list)
+    act_boundaries: dict[str, int] = field(default_factory=dict)
+    pov_distribution: dict[str, int] = field(default_factory=dict)
+    storyline_threads: list[str] = field(default_factory=list)
+```
+
+## Configuration
+
+```json
+{
+  "temporal": {
+    "mode": "directorial",
+    "narrative_arc": "rising_action",
+    "dramatic_tension": 0.7,  // base tension scaling
+    "backward_steps": 15,  // forward steps in directorial
+    "path_count": 3,
+    "fidelity_planning_mode": "hybrid",
+    "token_budget": 128000.0
+  }
+}
+```
+
+<Accordion title="Directorial Configuration Parameters">
+  | Parameter | Type | Default | Description |
+  |-----------|------|---------|-------------|
+  | `mode` | string | required | Must be `"directorial"` |
+  | `narrative_arc` | string | `"rising_action"` | Overall arc shape |
+  | `dramatic_tension` | float | 0.7 | Base tension scaling factor (0.0-1.0) |
+  | `backward_steps` | int | 15 | Number of scenes to generate |
+  | `path_count` | int | 3 | Number of narrative paths |
+  | `origin_year` | int | current | Starting year |
+  | `portal_year` | int | origin + 3 | Ending year (for duration calculation) |
+</Accordion>
+
+## Template Example: Hound of Baskervilles
+
+From `showcase/hound_shadow_directorial.json`:
+
+```json
+{
+  "scenario_description": "A detective investigates murders on fog-shrouded moors, each victim bearing strange hound bite marks. The narrative follows classical dramatic structure: rising action (discovery and investigation), climax (confrontation with supernatural hound), falling action (revelation and resolution). Unlike Pearl causality, events occur to serve narrative beats—the detective finds crucial clues at dramatically appropriate moments, the hound appears when tension peaks.",
+  "temporal": {
+    "mode": "directorial",
+    "narrative_arc": "rising_action",
+    "dramatic_tension": 0.7,
+    "backward_steps": 15,  // 15 scenes
+    "path_count": 5,
+    "fidelity_planning_mode": "hybrid",
+    "token_budget": 128000.0
+  },
+  "entities": {
+    "count": 5,
+    "types": ["human", "animal", "building"],
+    "initial_resolution": "dialog",
+    "animism_level": 4
+  },
+  "timepoints": {
+    "count": 15,
+    "resolution": "hour"
+  },
+  "metadata": {
+    "mechanisms_featured": [
+      "M17_modal_causality_directorial",
+      "M10_atmospheric_entities",
+      "M14_circadian_fog_patterns",
+      "M11_dramatic_dialog",
+      "M8_fear_embodiment",
+      "M16_animistic_moor"
+    ],
+    "narrative_beats": [
+      "t01_arrival_on_moor",
+      "t05_first_hound_sighting",
+      "t08_rising_dread",
+      "t11_climax_confrontation",
+      "t15_resolution"
+    ]
+  }
+}
+```
+
+**Cost**: $0.25 | **Duration**: ~8min | **Entities**: 5 | **Acts**: 5
+
+## Five-Act Structure
+
+Directorial mode uses **classical dramatic structure**:
+
+```python
+class ActPhase(str, Enum):
+    SETUP = "setup"        # 0-20%: Establish world, introduce characters
+    RISING = "rising"      # 20-50%: Tensions escalate, conflicts emerge
+    CLIMAX = "climax"      # 50-70%: Central confrontation or crisis
+    FALLING = "falling"    # 70-85%: Consequences unfold, tensions resolve
+    RESOLUTION = "resolution"  # 85-100%: New equilibrium established
+```
+
+**LLM Narrative Plan**:
+
+```python
+class NarrativePlan(BaseModel):
+    acts: list[ActDescription]  # 5 acts with percentage boundaries
+    beats: list[str]  # 8-12 key narrative moments
+    character_arcs: list[CharacterArc]  # Arc for each major entity
+    central_conflict: str  # The driving tension
+    thematic_elements: list[str]  # Core themes
+```
+
+**Example output**:
+```json
+{
+  "acts": [
+    {"name": "setup", "start_pct": 0.0, "end_pct": 0.2,
+     "description": "Detective arrives on windswept moors, learns of recent murders"},
+    {"name": "rising", "start_pct": 0.2, "end_pct": 0.5,
+     "description": "Investigation deepens, hound sightings increase, locals terrified"},
+    {"name": "climax", "start_pct": 0.5, "end_pct": 0.7,
+     "description": "Confrontation with the spectral hound at the ancient cairn"},
+    {"name": "falling", "start_pct": 0.7, "end_pct": 0.85,
+     "description": "Truth revealed: trained mastiff, phosphorescent paint, human conspiracy"},
+    {"name": "resolution", "start_pct": 0.85, "end_pct": 1.0,
+     "description": "Culprit apprehended, moor returns to uneasy peace"}
+  ],
+  "beats": [
+    "Detective Holmes arrives at Baskerville Hall",
+    "First victim discovered on the moor",
+    "Local legend of the demon hound recounted",
+    "Holmes examines paw prints—too large for any dog",
+    "Fog descends, isolating characters",
+    "Hound's howl echoes across the moor",
+    "Face-to-face encounter with the beast",
+    "Watson fires, beast falters",
+    "Phosphorescent paint discovered",
+    "Mastiff identified, owner confronted",
+    "Confession extracted",
+    "Order restored"
+  ],
+  "character_arcs": [
+    {
+      "entity_id": "holmes",
+      "arc_type": "protagonist",
+      "arc_description": "Skeptical detective confronts the irrational, maintains reason",
+      "key_moments": ["arrival", "doubt", "revelation", "triumph"]
+    }
+  ],
+  "central_conflict": "Reason vs. superstition; human evil cloaked in supernatural terror",
+  "thematic_elements": ["deduction", "fear", "isolation", "revelation"]
+}
+```
+
+## Camera System
+
+Directorial mode includes a **four-component camera system**:
+
+### 1. POV Rotation
+
+```python
+class CameraPlan(BaseModel):
+    pov_rotation: list[POVEntry]  # Which character perspective per act
+    framing_by_act: dict[str, str]  # Camera framing per act
+    storyline_threads: list[StorylineThread]  # A-plot, B-plot
+```
+
+**Example POV plan**:
+```json
+{
+  "pov_rotation": [
+    {"act": "setup", "pov_entity": "holmes", "framing": "wide",
+     "rationale": "Establish world through protagonist's eyes"},
+    {"act": "rising", "pov_entity": "watson", "framing": "close",
+     "rationale": "Build tension through sidekick's uncertainty"},
+    {"act": "climax", "pov_entity": "holmes", "framing": "subjective",
+     "rationale": "Immersive protagonist POV for peak tension"},
+    {"act": "falling", "pov_entity": "holmes", "framing": "overhead",
+     "rationale": "Pull back to show consequences"},
+    {"act": "resolution", "pov_entity": "holmes", "framing": "ensemble",
+     "rationale": "Show all characters in resolution"}
+  ]
+}
+```
+
+### 2. Framing Styles
+
+```python
+class Framing(str, Enum):
+    WIDE = "wide"          # Establishing shots, landscape
+    CLOSE = "close"        # Intimate, character-focused
+    OVERHEAD = "overhead"  # Panoramic, god's-eye view
+    SUBJECTIVE = "subjective"  # First-person immersion
+    ENSEMBLE = "ensemble"  # Multiple characters, ensemble cast
+```
+
+### 3. Dramatic Irony Detection
+
+```python
+def _detect_dramatic_irony(self, state: DirectorialState) -> tuple[bool, str, list[str]]:
+    """
+    LLM identifies audience-vs-character knowledge gaps.
+    
+    Returns:
+        (has_irony, irony_description, irony_entities)
+    
+    Example:
+    - Audience knows: The "ghost hound" is a trained mastiff
+    - Holmes doesn't know yet (until act 4)
+    - Irony entities: ["holmes", "watson", "audience"]
+    """
+```
+
+### 4. Parallel Storylines
+
+For complex narratives, interleave A-plot and B-plot:
+
+```python
+def _merge_parallel_storylines(
+    self,
+    a_plot_states: list[DirectorialState],
+    b_plot_states: list[DirectorialState]
+) -> list[DirectorialState]:
+    """
+    Programmatic interleave: 2 A-plot states, then 1 B-plot state.
+    """
+```
+
+## Tension Curve
+
+Directorial mode manages **target tension** per step:
+
+```python
+def _plan_tension_curve(self) -> list[float]:
+    """
+    Programmatic tension target per step based on act boundaries.
+    
+    Tension ranges per act:
+    - Setup: 0.2-0.4
+    - Rising: 0.4-0.7
+    - Climax: 0.8-1.0
+    - Falling: 0.5-0.3 (decreasing)
+    - Resolution: 0.1-0.2
+    """
+    tension_ranges = {
+        ActPhase.SETUP: (0.2, 0.4),
+        ActPhase.RISING: (0.4, 0.7),
+        ActPhase.CLIMAX: (0.8, 1.0),
+        ActPhase.FALLING: (0.5, 0.3),
+        ActPhase.RESOLUTION: (0.1, 0.2)
+    }
+```
+
+**LLM adjusts actual tension** based on generated content:
+
+```python
+def _compute_tension_for_state(self, state: DirectorialState, step: int) -> float:
+    """
+    Start from programmatic target, LLM adjusts based on actual events.
+    
+    Blends:
+    - Programmatic target (70%)
+    - LLM assessment of actual tension (30%)
+    """
+```
+
+## Fidelity Mapping
+
+Directorial mode maps **dramatic importance → resolution level**:
+
+```python
+def _compute_dramatic_importance(self, act: ActPhase, tension: float, beat: str) -> float:
+    """
+    Importance = f(act, tension, beat)
+    
+    Act contributions:
+    - Setup: 0.3
+    - Rising: 0.5
+    - Climax: 0.9
+    - Falling: 0.4
+    - Resolution: 0.3
+    
+    Boosts:
+    - tension > 0.8: +0.3
+    - narrative beat present: +0.15
+    """
+
+def _importance_to_resolution(self, importance: float) -> ResolutionLevel:
+    """
+    Maps 0.0-1.0 importance to resolution:
+    - > 0.8: TRAINED (climax, key beats)
+    - > 0.5: DIALOG (high-tension scenes)
+    - > 0.2: SCENE (standard)
+    - ≤ 0.2: TENSOR_ONLY (bridging)
+    """
+```
+
+**Result**: Climax scenes get TRAINED fidelity, bridging scenes get TENSOR_ONLY.
+
+## Scene Generation
+
+Core generation method with act/POV/tension integration:
+
+```python
+def _generate_interleaved_state(
+    self,
+    current_state: DirectorialState,
+    target_year: int,
+    target_month: int,
+    step: int,
+    act: ActPhase,
+    pov_entity: str,
+    framing: Framing,
+    tension_target: float
+) -> DirectorialState:
+    """
+    LLM generates scene from specific POV with framing and tension target.
+    
+    Temperature: 0.7 + tension * 0.2 (more creative at high tension)
+    
+    Prompt includes:
+    - Current act and position
+    - POV character and framing style
+    - Target tension level
+    - Relevant narrative beat
+    - Central conflict
+    """
+```
+
+**Example prompt excerpt**:
+```
+ACT: CLIMAX (tension target: 0.85)
+POV: holmes
+FRAMING: subjective
+NARRATIVE BEAT: Face-to-face encounter with the beast
+
+INSTRUCTIONS:
+1. Write from Holmes's first-person perspective
+2. Use subjective framing (internal thoughts, sensory immersion)
+3. Match the tension level (0.85/1.0)
+4. Serve the climax act's dramatic needs
+5. Be SPECIFIC - mention characters, locations, actions by name
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Lean Into Narrative Beats">
+    Define key beats in your scenario description:
+    ```
+    "Act 1: Detective arrives on moors, learns of murders.
+    Act 2: Investigation deepens, locals terrified.
+    Act 3: Confrontation with spectral hound.
+    Act 4: Truth revealed—trained mastiff, human conspiracy.
+    Act 5: Culprit apprehended, moor returns to peace."
+    ```
+  </Accordion>
+
+  <Accordion title="2. Use Atmospheric Entities (M10 + M16)">
+    Directorial mode pairs beautifully with animistic entities:
+    - **The moor itself** as an entity (oppressive atmosphere)
+    - **Fog** as a character (concealment, dread)
+    - **The hound** (supernatural fear)
+    
+    Set `animism_level: 4` in config.
+  </Accordion>
+
+  <Accordion title="3. Set dramatic_tension Appropriately">
+    `dramatic_tension` scales the entire tension curve:
+    - **0.5**: Gentle narrative (literary fiction)
+    - **0.7**: Standard drama (recommended)
+    - **0.9**: High-tension thriller
+  </Accordion>
+
+  <Accordion title="4. Plan 12-18 Scenes for Full Arc">
+    ```json
+    {
+      "temporal": {
+        "backward_steps": 15  // 15 scenes ≈ 3 per act
+      }
+    }
+    ```
+    
+    Fewer than 10 scenes may feel rushed.
+  </Accordion>
+
+  <Accordion title="5. Use Circadian Patterns (M14) for Mood">
+    Time-of-day affects atmosphere and behavior:
+    - Fog intensifies at night
+    - Characters more vulnerable after dark
+    - Revelations often occur at dawn
+  </Accordion>
+</AccordionGroup>
+
+## Cost Estimates
+
+<CardGroup cols={3}>
+  <Card title="Quick" icon="bolt">
+    **$0.10 - $0.15**
+    
+    3-4 entities
+    
+    8-10 scenes
+    
+    4-6 min
+  </Card>
+  
+  <Card title="Standard" icon="clock">
+    **$0.20 - $0.35**
+    
+    4-6 entities
+    
+    12-15 scenes
+    
+    8-12 min
+  </Card>
+  
+  <Card title="Comprehensive" icon="chart-line">
+    **$0.35 - $0.60**
+    
+    6-8 entities
+    
+    15-20 scenes
+    
+    15-20 min
+  </Card>
+</CardGroup>
+
+## Running Directorial Mode
+
+```bash
+# Run Hound of Baskervilles directorial template
+./run.sh run hound_shadow_directorial
+
+# Quick mode
+./run.sh run hound_shadow_directorial --quick
+```
+
+## Output Structure
+
+Directorial paths include rich narrative metadata:
+
+```json
+{
+  "path_id": "directorial_path_a8f9",
+  "arc_completion_score": 0.95,
+  "coherence_score": 0.87,
+  "tension_curve": [0.25, 0.32, 0.48, 0.61, 0.73, 0.85, 0.92, 0.78, 0.54, 0.31, 0.18],
+  "act_boundaries": {
+    "setup": 0,
+    "rising": 3,
+    "climax": 8,
+    "falling": 11,
+    "resolution": 13
+  },
+  "pov_distribution": {
+    "holmes": 9,
+    "watson": 4,
+    "ensemble": 2
+  },
+  "storyline_threads": ["main"],
+  "states": [
+    {
+      "act": "setup",
+      "tension_score": 0.25,
+      "pov_entity": "holmes",
+      "framing": "wide",
+      "dramatic_importance": 0.35,
+      "resolution_level": "scene",
+      "dramatic_irony": false,
+      "narrative_beat": "Detective Holmes arrives at Baskerville Hall"
+    }
+  ]
+}
+```
+
+## Model Requirements
+
+<Warning>
+  Directorial mode requires **reliable structured JSON output**. The system uses `qwen/qwen-2.5-72b-instruct` by default because Llama 4 Scout frequently returns malformed JSON for complex schemas.
+</Warning>
+
+```python
+# workflows/directorial_strategy.py
+DIRECTORIAL_MODEL = "qwen/qwen-2.5-72b-instruct"
+```
+
+## Related Mechanisms
+
+Directorial mode commonly pairs with:
+
+- **M8 (Embodied States)** - Fear affects cognition at high tension
+- **M10 (Scene Atmosphere)** - Moor/fog as narrative force
+- **M11 (Dialog Synthesis)** - Dramatic revelations
+- **M14 (Circadian Patterns)** - Night/fog affecting visibility
+- **M16 (Animistic Entities)** - Moor as character
+- **M17 (Modal Causality)** - Directorial-specific rules
+
+<Card title="Next Steps" icon="compass">
+  - [Forward Mode](/temporal-modes/forward) - Default causality
+  - [Portal Mode](/temporal-modes/portal) - Backward reasoning
+  - [Template Catalog](/templates/catalog) - Browse all templates
+</Card>

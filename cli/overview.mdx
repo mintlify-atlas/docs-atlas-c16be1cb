@@ -1,0 +1,247 @@
+---
+title: CLI Overview
+description: Command-line interface for Timepoint Pro temporal simulation
+---
+
+Timepoint Pro provides a powerful CLI for running temporal simulations, managing models, and querying simulation results.
+
+## Available Modes
+
+The CLI supports six primary modes, each accessed via the `mode` parameter:
+
+<CardGroup cols={2}>
+  <Card title="autopilot" icon="robot" href="#autopilot-mode">
+    Self-testing mode that evaluates temporal chains of varying lengths
+  </Card>
+  <Card title="train" icon="graduation-cap" href="#train-mode">
+    Train entities with historical context and populate knowledge states
+  </Card>
+  <Card title="temporal_train" icon="clock" href="#temporal-train-mode">
+    Train entities across temporal chains with causal evolution
+  </Card>
+  <Card title="evaluate" icon="chart-bar" href="#evaluate-mode">
+    Run evaluation metrics on trained entities
+  </Card>
+  <Card title="interactive" icon="terminal" href="#interactive-mode">
+    Natural language query REPL for exploring simulation results
+  </Card>
+  <Card title="models" icon="layer-group" href="#models-mode">
+    Manage and select LLM models
+  </Card>
+</CardGroup>
+
+## Autopilot Mode
+
+Autopilot mode runs automated tests of temporal chains with different lengths to evaluate system performance:
+
+```bash
+python cli.py mode=autopilot
+```
+
+**What it does:**
+- Tests temporal chains of configurable lengths (default: 3, 5, 7 timepoints)
+- Runs temporal training on each chain
+- Computes aggregate evaluation metrics
+- Generates cost and performance reports
+- Checks for causal chain violations
+
+**Configuration:**
+```yaml
+autopilot:
+  temporal_lengths: [3, 5, 7]  # Timepoint counts to test
+```
+
+**Output:**
+- Temporal coherence scores
+- Knowledge consistency scores
+- Causal chain violation counts
+- Per-template cost and token usage
+- Summary reports in JSON and Markdown
+
+## Train Mode
+
+Trains entities using historical contexts from templates:
+
+```bash
+python cli.py mode=train training.context=founding_fathers_1789
+```
+
+**Features:**
+- Rich historical context from predefined templates
+- Graph-based relationship modeling
+- Knowledge state population via LLM
+- Exposure event tracking
+- Resolution level management
+
+**Available contexts:**
+- `founding_fathers_1789` - Constitutional inauguration
+- Additional contexts in `entity_templates.py`
+
+## Temporal Train Mode
+
+Trains entities across a temporal chain with causal propagation:
+
+```bash
+python cli.py mode=temporal_train training.context=founding_fathers_1789 training.num_timepoints=5
+```
+
+**Key features:**
+- Builds causal temporal chains
+- Propagates knowledge states forward
+- Tracks knowledge growth per timepoint
+- Records exposure events for each learning moment
+- Validates temporal causality
+
+**Configuration:**
+```yaml
+training:
+  context: founding_fathers_1789
+  num_timepoints: 5
+```
+
+## Evaluate Mode
+
+Runs evaluation metrics on all entities in the database:
+
+```bash
+python cli.py mode=evaluate
+```
+
+**Computed metrics:**
+- **Temporal Coherence** - Consistency across timepoints
+- **Knowledge Consistency** - Information conservation compliance  
+- **Biological Plausibility** - Constraint enforcement
+
+**Output:**
+- Per-entity metric scores
+- Resolution level distribution
+- Aggregate statistics
+- Cost tracking
+
+See [Evaluate](./evaluate) for detailed metric descriptions.
+
+## Interactive Mode
+
+Natural language query REPL for exploring simulation data:
+
+```bash
+python cli.py mode=interactive
+```
+
+**Capabilities:**
+- Parse natural language queries
+- Retrieve entity knowledge states
+- Synthesize contextual responses
+- Track query costs
+- Show simulation statistics
+
+**Example queries:**
+```
+"What did George Washington think about becoming president?"
+"How did Thomas Jefferson feel during the inauguration?"
+"What actions did Alexander Hamilton take after the ceremony?"
+```
+
+See [Interactive Mode](./interactive) for full details.
+
+## Models Mode
+
+Manage LLM model selection and testing:
+
+```bash
+python cli.py mode=models
+```
+
+**Operations:**
+- List available Llama models from OpenRouter
+- View detailed model information (context length, pricing)
+- Switch between models
+- Test model connectivity
+- Refresh model catalog
+
+## Branch Mode
+
+Explore counterfactual "what-if" scenarios:
+
+```bash
+python cli.py mode=branch
+```
+
+**Features:**
+- Interactive branching explorer
+- Counterfactual query analysis
+- Alternate timeline generation
+
+## Configuration
+
+All modes use Hydra configuration from `conf/config.yaml`:
+
+```yaml
+mode: autopilot  # or train, evaluate, interactive, models, branch
+
+database:
+  url: sqlite:///timepoint.db
+
+llm:
+  base_url: https://openrouter.ai/api/v1
+  model: meta-llama/llama-3.1-70b-instruct
+
+training:
+  context: founding_fathers_1789
+  num_timepoints: 5
+  graph_size: 10
+  target_resolution: SCENE
+
+autopilot:
+  temporal_lengths: [3, 5, 7]
+```
+
+## Command-Line Overrides
+
+Override any config value from the command line:
+
+```bash
+# Change mode
+python cli.py mode=train
+
+# Override training parameters
+python cli.py mode=temporal_train training.num_timepoints=10
+
+# Change LLM model
+python cli.py mode=interactive llm.model=deepseek/deepseek-chat
+
+# Set database path
+python cli.py database.url=sqlite:///custom.db
+```
+
+## Cost Tracking
+
+All modes track LLM API costs and token usage:
+
+```
+Cost so far: $0.0234
+Tokens used: 1,245
+```
+
+Reports are generated in `reports/` directory with:
+- Total cost breakdown
+- Token usage statistics
+- Per-operation metrics
+- Timestamp and configuration
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Run Command" icon="play" href="./run">
+    Execute simulations with ./run.sh
+  </Card>
+  <Card title="Training" icon="graduation-cap" href="./train">
+    Learn about training modes
+  </Card>
+  <Card title="Interactive Queries" icon="terminal" href="./interactive">
+    Query your simulation data
+  </Card>
+  <Card title="Evaluation" icon="chart-bar" href="./evaluate">
+    Understand evaluation metrics
+  </Card>
+</CardGroup>

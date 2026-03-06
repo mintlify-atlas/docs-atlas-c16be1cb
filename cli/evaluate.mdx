@@ -1,0 +1,429 @@
+---
+title: Evaluation Metrics
+description: Measure temporal coherence, knowledge consistency, and biological plausibility
+---
+
+Timepoint Pro provides built-in evaluation metrics to validate simulation quality and consistency.
+
+## Running Evaluation
+
+```bash
+python cli.py mode=evaluate
+```
+
+Evaluates all entities currently stored in the database.
+
+## Core Metrics
+
+Three primary metrics assess simulation quality:
+
+<CardGroup cols={3}>
+  <Card title="Temporal Coherence" icon="clock">
+    Consistency of entities across timepoints
+  </Card>
+  <Card title="Knowledge Consistency" icon="brain">
+    Information conservation compliance
+  </Card>
+  <Card title="Biological Plausibility" icon="heartbeat">
+    Constraint enforcement validation
+  </Card>
+</CardGroup>
+
+## Temporal Coherence Score
+
+Measures behavioral consistency across timepoints.
+
+### Formula
+
+```python
+violations = 0
+for each consecutive timepoint pair:
+    if personality_traits_changed_significantly:
+        violations += 1
+
+score = 1.0 - (violations / num_transitions)
+```
+
+### What It Validates
+
+<AccordionGroup>
+  <Accordion title="Behavioral Inertia" icon="weight-hanging">
+    Personality traits should remain stable over time
+    
+    **Checks:**
+    - Personality trait consistency
+    - Character arc plausibility
+    - No sudden personality shifts
+    
+    **Example violations:**
+    - Cautious character becomes reckless overnight
+    - Reserved person suddenly becomes extroverted
+    - Core values change without cause
+  </Accordion>
+  
+  <Accordion title="Trait Persistence" icon="fingerprint">
+    Core characteristics persist unless causally justified
+    
+    **Checks:**
+    - Trait stability across timepoints
+    - Gradual vs. sudden changes
+    - Causal explanations for shifts
+  </Accordion>
+</AccordionGroup>
+
+### Score Interpretation
+
+<Tabs>
+  <Tab title="1.00">
+    **Perfect Coherence**
+    
+    No behavioral violations detected. Entities maintain consistent personalities across all timepoints.
+  </Tab>
+  
+  <Tab title="0.80-0.99">
+    **High Coherence**
+    
+    Minor violations, likely justified by causal events. Good temporal consistency.
+  </Tab>
+  
+  <Tab title="0.60-0.79">
+    **Moderate Coherence**
+    
+    Some behavioral inconsistencies. May need review of temporal transitions.
+  </Tab>
+  
+  <Tab title="<0.60">
+    **Low Coherence**
+    
+    Significant violations. Entities showing unstable or inconsistent behavior.
+  </Tab>
+</Tabs>
+
+## Knowledge Consistency Score
+
+Validates information conservation - entities can only know what they've been exposed to.
+
+### Formula
+
+```python
+if knowledge_properly_sourced:
+    score = 1.0
+else:
+    score = 0.0
+```
+
+### What It Validates
+
+<AccordionGroup>
+  <Accordion title="Exposure Event Tracking" icon="eye">
+    Every knowledge item must have a source
+    
+    **Checks:**
+    - All knowledge has recorded exposure event
+    - Source entity or event exists
+    - Timestamp is causally valid
+    
+    **Example violations:**
+    - Entity knows information without witnessing it
+    - Knowledge appears without source
+    - Anachronistic information (knows future events)
+  </Accordion>
+  
+  <Accordion title="Information Propagation" icon="share-nodes">
+    Knowledge spreads through valid paths
+    
+    **Checks:**
+    - Information flows along relationship edges
+    - No spontaneous knowledge generation
+    - Social network constraints respected
+    
+    **Example violations:**
+    - Entity knows secrets without connection to source
+    - Information spreads faster than possible
+    - Knowledge crosses disconnected graph components
+  </Accordion>
+  
+  <Accordion title="Temporal Causality" icon="arrow-right">
+    Knowledge can only come from past events
+    
+    **Checks:**
+    - Exposure timestamp < current timepoint
+    - No future information leak
+    - Proper causal chain
+    
+    **Example violations:**
+    - Entity knows outcome before it happens
+    - Future information influences past decisions
+    - Causal chain broken
+  </Accordion>
+</AccordionGroup>
+
+### Score Interpretation
+
+<Tabs>
+  <Tab title="1.0">
+    **Valid**
+    
+    All knowledge properly sourced. No information conservation violations.
+  </Tab>
+  
+  <Tab title="0.0">
+    **Invalid**
+    
+    Knowledge consistency violation detected. Entity has information without valid exposure.
+  </Tab>
+</Tabs>
+
+## Biological Plausibility Score
+
+Measures constraint enforcement and physical/resource realism.
+
+### Formula
+
+```python
+violations = 0
+for each action:
+    if violates_constraints:
+        violations += 1
+
+score = 1.0 - (violations / num_actions)
+```
+
+### What It Validates
+
+<AccordionGroup>
+  <Accordion title="Physical Constraints" icon="ruler">
+    Actions respect physical limitations
+    
+    **Checks:**
+    - Movement speed plausible
+    - Energy expenditure realistic
+    - Physical capabilities within human range
+    
+    **Example violations:**
+    - Entity travels impossible distance in timespan
+    - Action requires more energy than available
+    - Superhuman abilities without justification
+  </Accordion>
+  
+  <Accordion title="Resource Constraints" icon="gas-pump">
+    Actions consume appropriate resources
+    
+    **Checks:**
+    - Energy budget tracking
+    - Resource availability
+    - Consumption rates
+    
+    **Example violations:**
+    - Entity acts without sufficient energy
+    - Resource consumption exceeds supply
+    - Negative resource balances
+  </Accordion>
+  
+  <Accordion title="Embodied States" icon="person">
+    Physical and emotional states influence behavior
+    
+    **Checks:**
+    - Fatigue affects performance
+    - Stress influences decisions
+    - Physiological needs matter
+    
+    **Example violations:**
+    - Exhausted entity performs at peak
+    - Emotional state ignored in decision-making
+    - Physical needs not reflected in behavior
+  </Accordion>
+</AccordionGroup>
+
+### Score Interpretation
+
+<Tabs>
+  <Tab title="1.00">
+    **Fully Plausible**
+    
+    No constraint violations. All actions respect physical and resource limitations.
+  </Tab>
+  
+  <Tab title="0.80-0.99">
+    **Highly Plausible**
+    
+    Minor violations, likely edge cases. Generally realistic.
+  </Tab>
+  
+  <Tab title="0.60-0.79">
+    **Moderately Plausible**
+    
+    Some unrealistic actions. May need constraint tuning.
+  </Tab>
+  
+  <Tab title="<0.60">
+    **Low Plausibility**
+    
+    Many violations. Entities behaving unrealistically.
+  </Tab>
+</Tabs>
+
+## Example Output
+
+<CodeGroup>
+```bash Terminal Output
+Evaluating 5 entities:
+
+  george_washington:
+    Temporal Coherence:      0.95
+    Knowledge Consistency:   1.00
+    Biological Plausibility: 0.92
+
+  john_adams:
+    Temporal Coherence:      0.88
+    Knowledge Consistency:   1.00
+    Biological Plausibility: 0.87
+
+  thomas_jefferson:
+    Temporal Coherence:      0.91
+    Knowledge Consistency:   1.00
+    Biological Plausibility: 0.89
+
+  alexander_hamilton:
+    Temporal Coherence:      0.93
+    Knowledge Consistency:   1.00
+    Biological Plausibility: 0.94
+
+  james_madison:
+    Temporal Coherence:      0.87
+    Knowledge Consistency:   1.00
+    Biological Plausibility: 0.85
+
+Resolution Distribution:
+  SCENE: 3 entities
+  DIALOG: 2 entities
+
+Cost: $0.00 (evaluation uses cached data)
+Tokens: 0
+```
+</CodeGroup>
+
+## Resolution Distribution
+
+Evaluation also reports entity resolution levels:
+
+<Tabs>
+  <Tab title="TENSOR_ONLY">
+    Minimal detail, compressed representation only
+    
+    ~200 tokens per entity
+  </Tab>
+  
+  <Tab title="SCENE">
+    Medium detail with scene context
+    
+    ~500-1000 tokens per entity
+  </Tab>
+  
+  <Tab title="DIALOG">
+    High detail with dialog generation
+    
+    ~2000-4000 tokens per entity
+  </Tab>
+  
+  <Tab title="FULL_CONTEXT">
+    Maximum detail with complete history
+    
+    ~5000+ tokens per entity
+  </Tab>
+</Tabs>
+
+## Generated Reports
+
+Evaluation generates two report files:
+
+<CodeGroup>
+```json reports/evaluation_20241207_123456.json
+{
+  "entities_evaluated": 5,
+  "resolution_distribution": {
+    "SCENE": 3,
+    "DIALOG": 2
+  },
+  "cost": 0.00,
+  "tokens": 0,
+  "timestamp": "2024-12-07T12:34:56"
+}
+```
+
+```markdown reports/evaluation_20241207_123456.md
+# Evaluation Report
+
+**Date:** 2024-12-07 12:34:56
+**Entities Evaluated:** 5
+
+## Resolution Distribution
+
+- SCENE: 3 entities
+- DIALOG: 2 entities
+
+## Metrics Summary
+
+| Entity | Temporal Coherence | Knowledge Consistency | Biological Plausibility |
+|--------|-------------------|----------------------|------------------------|
+| george_washington | 0.95 | 1.00 | 0.92 |
+| john_adams | 0.88 | 1.00 | 0.87 |
+| thomas_jefferson | 0.91 | 1.00 | 0.89 |
+| alexander_hamilton | 0.93 | 1.00 | 0.94 |
+| james_madison | 0.87 | 1.00 | 0.85 |
+
+## Cost
+
+- Total: $0.00
+- Tokens: 0
+```
+</CodeGroup>
+
+## Validation Integration
+
+Evaluation metrics use the same validators as training:
+
+- `validate_behavioral_inertia()` - Temporal coherence
+- `validate_information_conservation()` - Knowledge consistency
+- `validate_biological_constraints()` - Biological plausibility
+
+See [Validation](../core-concepts/validation) for implementation details.
+
+## When to Evaluate
+
+Run evaluation after:
+
+<Steps>
+  <Step title="Training">
+    After `mode=train` or `mode=temporal_train` to validate entity quality
+  </Step>
+  
+  <Step title="Simulation">
+    After running templates with `./run.sh` to check consistency
+  </Step>
+  
+  <Step title="Debugging">
+    When investigating unexpected entity behavior
+  </Step>
+  
+  <Step title="Before Export">
+    Before exporting data to ensure quality
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Interactive Queries" icon="terminal" href="./interactive">
+    Query your evaluated entities
+  </Card>
+  <Card title="Training" icon="graduation-cap" href="./train">
+    Improve entity quality with better training
+  </Card>
+  <Card title="Validation" icon="shield" href="../core-concepts/validation">
+    Learn about validation system
+  </Card>
+  <Card title="CLI Overview" icon="terminal" href="./overview">
+    Back to CLI overview
+  </Card>
+</CardGroup>

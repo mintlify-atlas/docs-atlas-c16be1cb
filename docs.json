@@ -1,122 +1,163 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Timepoint Pro",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7c7c7c",
+    "light": "#c7c7c7",
+    "dark": "#0a0a0a"
   },
-  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "https://media.brand.dev/17c582de-31c5-4213-9af3-2c45bfebcab9.png",
+    "dark": "https://media.brand.dev/16d4e625-805e-4c6b-9a42-981dfe891518.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/timepoint-ai/timepoint-pro"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/timepoint-ai/timepoint-pro",
+      "x": "https://x.com/seanmcdonaldxyz"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation",
+              "first-simulation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/snag",
+              "concepts/temporal-modes",
+              "concepts/fidelity-management",
+              "concepts/knowledge-provenance",
+              "concepts/mechanisms"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Temporal Modes",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "temporal-modes/forward",
+              "temporal-modes/portal",
+              "temporal-modes/branching",
+              "temporal-modes/cyclical",
+              "temporal-modes/directorial"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Mechanisms",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "mechanisms/overview",
+              "mechanisms/fidelity-management",
+              "mechanisms/temporal-reasoning",
+              "mechanisms/knowledge-provenance",
+              "mechanisms/entity-simulation",
+              "mechanisms/infrastructure"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/templates",
+              "guides/dialog-synthesis",
+              "guides/training-data",
+              "guides/cost-optimization",
+              "guides/validation"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/mars-mission",
+              "examples/castaway-colony",
+              "examples/board-meeting",
+              "examples/custom-scenario"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "CLI Commands",
             "pages": [
-              "api-reference/introduction"
+              "cli/overview",
+              "cli/run",
+              "cli/train",
+              "cli/evaluate",
+              "cli/interactive"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "REST API",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/overview",
+              "api/authentication",
+              "api/tensors",
+              "api/simulations",
+              "api/batch",
+              "api/search"
+            ]
+          },
+          {
+            "group": "Python API",
+            "pages": [
+              "python/orchestrator",
+              "python/llm-client",
+              "python/storage",
+              "python/workflows",
+              "python/schemas"
+            ]
+          },
+          {
+            "group": "Export Formats",
+            "pages": [
+              "export/tdf",
+              "export/jsonl",
+              "export/sqlite",
+              "export/fountain"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integration",
+        "groups": [
+          {
+            "group": "Timepoint Suite",
+            "pages": [
+              "integration/suite-overview",
+              "integration/flash",
+              "integration/clockchain",
+              "integration/snag-bench",
+              "integration/proteus"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/local",
+              "deployment/pro-cloud",
+              "deployment/railway",
+              "deployment/docker"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

@@ -1,0 +1,497 @@
+---
+title: 'Portal Mode'
+description: 'Backward reasoning from fixed endpoint to discover plausible origin paths'
+icon: 'circle-arrow-left'
+---
+
+## What is Portal Mode?
+
+Portal mode implements **backward temporal reasoning**: you specify a known **endpoint** (the "portal") and a known **origin**, then the system discovers plausible paths that connect them by working backward through time.
+
+Think of Portal mode as **reverse causality**: "Given that X happened in 2031, what chain of decisions in 2026-2030 made X inevitable?"
+
+<Note>
+  **Core insight**: Portal mode is for root cause analysis, disaster postmortems, and forensic timelines—scenarios where you know the outcome and need to understand how it came to be.
+</Note>
+
+## When to Use Portal Mode
+
+Use Portal mode when:
+
+- **You know the outcome** - A disaster occurred, a verdict was reached, a mission failed
+- **Root cause analysis** - Trace backward to find decision chains that led to the outcome
+- **Forensic investigation** - Reconstruct events leading to a known result
+- **Strategic postmortems** - "How did we lose this deal?" "Why did this product fail?"
+- **Regulatory analysis** - Trace institutional failure back to policy/staffing decisions
+
+<CardGroup cols={2}>
+  <Card title="Perfect for" icon="magnifying-glass">
+    - Disaster investigations (Mars mission failure)
+    - Litigation verdict analysis ($47M judgment—how?)
+    - Product launch failure postmortems
+    - Security breach forensics
+    - Institutional failure analysis
+  </Card>
+  <Card title="Not ideal for" icon="xmark">
+    - Open-ended exploration (use Forward/Branching)
+    - Multiple endings (use Branching)
+    - No clear endpoint (use Forward)
+    - Narrative storytelling (use Directorial)
+  </Card>
+</CardGroup>
+
+## How Portal Mode Works
+
+<Steps>
+  <Step title="Define Portal & Origin">
+    Specify the **endpoint** (portal) and the **starting point** (origin):
+    ```json
+    {
+      "temporal": {
+        "mode": "portal",
+        "portal_description": "Ares III Mars mission loses contact during orbital insertion in March 2031. Cascading systems failures in life support and communications.",
+        "portal_year": 2031,
+        "origin_year": 2026,
+        "backward_steps": 10
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Generate Backward Steps">
+    Starting from the portal, the system generates **antecedent states** at each step:
+    - What could have happened at T-1 to lead to the portal state?
+    - Generate N candidates per step (default: 3)
+    - Use LLM + hybrid scoring to rank plausibility
+  </Step>
+
+  <Step title="Score & Filter Paths">
+    Each backward path is scored using:
+    - **LLM plausibility** (0.3 weight)
+    - **Historical precedent** (0.2 weight)
+    - **Causal necessity** (0.3 weight)
+    - **Entity capability** (0.2 weight)
+    
+    Paths below `coherence_threshold` (default: 0.7) are pruned.
+  </Step>
+
+  <Step title="Forward Validation">
+    To prevent hallucination, Portal mode **forward-simulates** each backward path:
+    - Does the path make sense when read forward?
+    - Can entities actually perform these actions?
+    - Are knowledge dependencies satisfied?
+  </Step>
+
+  <Step title="Identify Pivot Points">
+    The system detects **critical decision moments** where paths diverge:
+    - "If Sarah had escalated the anomaly here, the mission would have delayed"
+    - These become pivot points for analysis
+  </Step>
+</Steps>
+
+## Architecture
+
+Portal mode is implemented in `workflows/portal_strategy.py`:
+
+```python
+class PortalStrategy:
+    """
+    Backward simulation strategy for portal-anchored scenarios.
+    
+    Attributes:
+        config: TemporalConfig with mode=PORTAL
+        llm: LLM client for state generation and scoring
+        store: GraphStore for persistence
+        entity_roster: Optional dict of entity definitions from template
+    """
+    
+    def run(self) -> list[PortalPath]:
+        """
+        Execute portal-anchored backward simulation.
+        
+        Returns:
+            List of PortalPath objects, ranked by coherence score
+        
+        Process:
+        1. Generate portal endpoint state from description
+        2. Determine exploration strategy (adaptive/oscillating/random)
+        3. Generate backward paths (N paths, M steps each)
+        4. Validate forward coherence (can we get from origin to portal?)
+        5. Rank paths by hybrid scoring
+        6. Detect pivot points using path divergence analysis
+        7. Return top K ranked paths with explanations
+        """
+```
+
+### Key Data Structures
+
+```python
+@dataclass
+class PortalState:
+    """A state at a specific point in the backward simulation"""
+    year: int
+    month: int
+    description: str
+    entities: list[Entity]
+    world_state: dict[str, Any]
+    plausibility_score: float = 0.0
+    parent_state: Optional["PortalState"] = None  # T+1
+    children_states: list["PortalState"] = field(default_factory=list)  # T-1
+    resolution_level: ResolutionLevel = None
+
+@dataclass
+class PortalPath:
+    """Complete path from origin to portal"""
+    path_id: str
+    states: list[PortalState]  # Ordered origin→portal
+    coherence_score: float
+    pivot_points: list[int]  # Indices of critical decisions
+    explanation: str
+    validation_details: dict[str, Any]
+```
+
+## Configuration
+
+```json
+{
+  "temporal": {
+    "mode": "portal",
+    "portal_description": "The endpoint state description",
+    "portal_year": 2031,
+    "origin_year": 2026,
+    "backward_steps": 10,
+    "exploration_mode": "adaptive",
+    "candidate_antecedents_per_step": 3,
+    "path_count": 5,
+    "coherence_threshold": 0.7,
+    "use_simulation_judging": true,
+    "simulation_forward_steps": 1,
+    "judge_model": "meta-llama/llama-3.1-405b-instruct"
+  }
+}
+```
+
+<Accordion title="Portal Configuration Parameters">
+  | Parameter | Type | Default | Description |
+  |-----------|------|---------|-------------|
+  | `mode` | string | required | Must be `"portal"` |
+  | `portal_description` | string | required | Description of the endpoint state |
+  | `portal_year` | int | required | Year of the portal (endpoint) |
+  | `origin_year` | int | required | Year of the origin (start) |
+  | `backward_steps` | int | 10 | Number of backward steps to generate |
+  | `exploration_mode` | string | `"adaptive"` | `"reverse_chronological"`, `"oscillating"`, `"random"`, `"adaptive"` |
+  | `oscillation_complexity_threshold` | int | 10 | If steps > threshold, use oscillating |
+  | `candidate_antecedents_per_step` | int | 3 | Candidate prior states per step |
+  | `path_count` | int | 5 | Number of complete paths to return |
+  | `coherence_threshold` | float | 0.7 | Minimum score for path validation |
+  | `llm_scoring_weight` | float | 0.3 | Weight for LLM plausibility |
+  | `historical_precedent_weight` | float | 0.2 | Weight for historical similarity |
+  | `causal_necessity_weight` | float | 0.3 | Weight for causal linkage |
+  | `entity_capability_weight` | float | 0.2 | Weight for entity capability |
+  | `use_simulation_judging` | bool | true | Enable forward validation with judge model |
+  | `simulation_forward_steps` | int | 1 | Steps to forward-simulate for validation |
+  | `judge_model` | string | `"llama-3.1-405b"` | Model for judging path coherence |
+</Accordion>
+
+## Template Examples
+
+### Example 1: Ares III Mars Mission Portal
+
+From `showcase/mars_mission_portal.json`:
+
+```json
+{
+  "scenario_description": "PORTAL backward reasoning from a failed crewed Mars mission in 2031 to its origins in 2026. The Ares III crew of 4 astronauts launched successfully but lost contact during Mars orbital insertion.",
+  "temporal": {
+    "mode": "portal",
+    "portal_description": "Ares III crewed Mars mission loses contact during orbital insertion in March 2031. Last telemetry shows cascading systems failures in life support and communications. Trace backward to understand how this disaster was built, decision by decision.",
+    "portal_year": 2031,
+    "origin_year": 2026,
+    "backward_steps": 10,
+    "exploration_mode": "adaptive",
+    "candidate_antecedents_per_step": 3,
+    "path_count": 5,
+    "coherence_threshold": 0.7,
+    "use_simulation_judging": true,
+    "judge_model": "meta-llama/llama-3.1-405b-instruct",
+    "fidelity_planning_mode": "hybrid",
+    "token_budget": 200000.0
+  },
+  "metadata": {
+    "entity_roster": {
+      "sarah_okafor": {
+        "role": "Mission Commander. Experienced but politically pressured.",
+        "initial_knowledge": ["mission_parameters", "crew_capabilities"]
+      },
+      "raj_mehta": {
+        "role": "Flight Engineer. Brilliant but conflict-averse.",
+        "initial_knowledge": ["flight_systems_status", "anomaly_detection"]
+      },
+      "lin_zhang": {
+        "role": "Systems Engineer. Detected anomalies but was overruled.",
+        "initial_knowledge": ["alss_design", "oxygen_generator_failures"]
+      },
+      "thomas_webb": {
+        "role": "Mission Director. Prioritized schedule over safety.",
+        "initial_knowledge": ["budget_constraints", "schedule_milestones"]
+      }
+    }
+  }
+}
+```
+
+**Cost**: $0.40 | **Duration**: ~15min | **Entities**: 4 | **Steps**: 10
+
+**Pivot points discovered**:
+1. March 2026: Initial life support design decision (simplified system)
+2. August 2027: Lin Zhang's anomaly report marked "reviewed" without action
+3. January 2029: Budget cut forces crew size reduction
+4. November 2030: Final pre-launch review overrides safety concerns
+
+### Example 2: Litigation Verdict Portal
+
+From `persona/agent3_litigation_portal.json`:
+
+```json
+{
+  "scenario_description": "PORTAL backward reasoning from $47M trade secret verdict to the chain of decisions that made it inevitable. Working backward from jury verdict through discovery, depositions, document retention failures, and initial IP protection gaps.",
+  "temporal": {
+    "mode": "portal",
+    "portal_description": "$47 million jury verdict for plaintiff in trade secret misappropriation case. Jury found defendant willfully misappropriated 14 proprietary algorithms and customer data. Verdict includes $32M compensatory damages and $15M punitive damages.",
+    "portal_year": 2025,
+    "origin_year": 2020,
+    "backward_steps": 12,
+    "path_count": 5,
+    "coherence_threshold": 0.75
+  }
+}
+```
+
+**Cost**: $0.40 | **Duration**: ~15min | **Use case**: Legal postmortem
+
+## Exploration Modes
+
+Portal mode supports multiple **exploration strategies**:
+
+<Tabs>
+  <Tab title="Reverse Chronological">
+    **Standard backward stepping**: 100 → 99 → 98 → ... → 1
+    
+    - Simplest approach
+    - Good for linear cause-effect chains
+    - Default for `backward_steps <= 10`
+  </Tab>
+  
+  <Tab title="Oscillating">
+    **Fill from both ends**: 100 → 1 → 99 → 2 → 98 → 3 → ...
+    
+    - Anchors both endpoints early
+    - Better for complex scenarios
+    - Used when `backward_steps > oscillation_complexity_threshold`
+  </Tab>
+  
+  <Tab title="Adaptive">
+    **System decides** based on complexity
+    
+    - Uses oscillating for complex scenarios (steps > 10)
+    - Uses reverse chronological for simpler scenarios
+    - **Recommended** for most use cases
+  </Tab>
+  
+  <Tab title="Random">
+    **Random step order** for maximum exploration
+    
+    - Fills steps in random temporal order
+    - Not yet implemented (falls back to reverse chronological)
+  </Tab>
+</Tabs>
+
+## Hybrid Scoring System
+
+Portal paths are scored using a **weighted hybrid approach**:
+
+```python
+def _score_path(self, path: PortalPath) -> float:
+    """
+    Composite scoring:
+    - LLM plausibility (30%): Does this make narrative sense?
+    - Historical precedent (20%): Has something similar happened?
+    - Causal necessity (30%): Must A → B given C?
+    - Entity capability (20%): Can entity X perform action Y?
+    """
+    llm_score = self._llm_plausibility(path)
+    historical_score = self._historical_similarity(path)
+    causal_score = self._causal_necessity(path)
+    capability_score = self._entity_capability_check(path)
+    
+    return (
+        llm_score * self.config.llm_scoring_weight +
+        historical_score * self.config.historical_precedent_weight +
+        causal_score * self.config.causal_necessity_weight +
+        capability_score * self.config.entity_capability_weight
+    )
+```
+
+You can tune these weights in your template configuration.
+
+## Pivot Point Detection
+
+Portal mode automatically detects **critical decision moments** where paths diverge:
+
+```python
+def _detect_pivot_points(self, path: PortalPath, divergence_analysis: dict) -> list[int]:
+    """
+    Identify states where decisions created irreversible consequences.
+    
+    A pivot point is a state where:
+    1. Multiple alternative antecedents were plausible
+    2. The chosen antecedent had high causal weight
+    3. Alternate paths would have led to different outcomes
+    """
+```
+
+**Output example**:
+```json
+{
+  "path_id": "portal_path_a8f9",
+  "pivot_points": [3, 7, 9],
+  "pivot_explanations": [
+    "State 3 (Aug 2027): Lin Zhang's anomaly report was marked 'reviewed' without escalation. If escalated, mission would have delayed 6 months for ALSS redesign.",
+    "State 7 (Jan 2029): Budget cut forced crew reduction from 6 to 4. Eliminated redundancy in life support operations.",
+    "State 9 (Nov 2030): Pre-launch review overrode safety concerns to meet launch window. Final point of no return."
+  ]
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Write Specific Portal Descriptions">
+    The portal description anchors the entire backward search. Be concrete:
+    
+    **Good**:
+    > "Ares III loses contact during orbital insertion on March 15, 2031 at 14:23 UTC. Last telemetry shows O2 generator failure cascading to comms blackout. All 4 crew presumed lost."
+    
+    **Bad**:
+    > "The Mars mission failed."
+  </Accordion>
+
+  <Accordion title="2. Use Entity Roster to Anchor Characters">
+    Portal mode works best when you pre-define key entities:
+    
+    ```json
+    {
+      "metadata": {
+        "entity_roster": {
+          "lin_zhang": {
+            "role": "Systems Engineer who detected ALSS anomalies",
+            "initial_knowledge": ["oxygen_generator_test_failures"],
+            "personality_traits": ["precise", "frustrated", "data-driven"]
+          }
+        }
+      }
+    }
+    ```
+    
+    This prevents entity hallucination and grounds the narrative in specific people.
+  </Accordion>
+
+  <Accordion title="3. Enable Simulation Judging for Critical Scenarios">
+    For high-stakes analysis (legal, disaster investigation), enable forward validation:
+    
+    ```json
+    {
+      "temporal": {
+        "use_simulation_judging": true,
+        "simulation_forward_steps": 2,
+        "judge_model": "meta-llama/llama-3.1-405b-instruct"
+      }
+    }
+    ```
+    
+    This uses a large judge model to forward-simulate each path and verify coherence.
+  </Accordion>
+
+  <Accordion title="4. Tune Coherence Threshold">
+    - **Exploratory postmortems**: `0.65` (permissive, more paths)
+    - **Standard analysis**: `0.70` (balanced)
+    - **Legal/regulatory**: `0.75` (strict, fewer but higher-quality paths)
+  </Accordion>
+
+  <Accordion title="5. Request Multiple Paths">
+    Set `path_count: 5` or higher to explore multiple failure modes:
+    
+    - Path 1: Schedule pressure overrode safety concerns
+    - Path 2: Budget cuts eliminated redundancy
+    - Path 3: Personnel conflict prevented escalation
+    - Path 4: Technical debt accumulated unnoticed
+    - Path 5: Regulatory oversight gaps
+  </Accordion>
+</AccordionGroup>
+
+## Cost Estimates
+
+<CardGroup cols={3}>
+  <Card title="Quick" icon="bolt">
+    **$0.08 - $0.15**
+    
+    3-4 entities
+    
+    5 backward steps
+    
+    3-5 min
+  </Card>
+  
+  <Card title="Standard" icon="clock">
+    **$0.25 - $0.50**
+    
+    4-6 entities
+    
+    8-10 steps
+    
+    10-15 min
+  </Card>
+  
+  <Card title="Comprehensive" icon="chart-line">
+    **$0.40 - $1.00**
+    
+    6-8 entities
+    
+    10-15 steps
+    
+    15-25 min
+  </Card>
+</CardGroup>
+
+<Note>
+  Portal mode is more expensive than Forward because it explores multiple candidate antecedents per step and runs forward validation.
+</Note>
+
+## Running Portal Mode
+
+```bash
+# Run a portal template
+./run.sh run mars_mission_portal
+
+# Quick mode (fewer steps, lower cost)
+./run.sh run mars_mission_portal --portal-quick
+
+# With simulation judging enabled
+./run.sh run mars_mission_portal --portal-simjudged-quick
+```
+
+## Related Mechanisms
+
+Portal mode commonly pairs with:
+
+- **M3 (Exposure Events)** - Track when entities learned critical information
+- **M7 (Causal Chains)** - Validate backward→forward causality
+- **M11 (Dialog Synthesis)** - Generate conversations at pivot points
+- **M13 (Relationship Evolution)** - Track trust erosion over time
+- **M17 (Modal Causality)** - Portal-specific validation rules
+
+<Card title="Next Steps" icon="compass">
+  - [Forward Mode](/temporal-modes/forward) - Default forward causality
+  - [Branching Mode](/temporal-modes/branching) - Counterfactual timelines
+  - [Template Catalog](/templates/catalog) - Browse all 21+ templates
+</Card>

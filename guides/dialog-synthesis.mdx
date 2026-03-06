@@ -1,0 +1,526 @@
+---
+title: 'Dialog Synthesis'
+description: 'Per-character dialog generation with LangGraph pipeline, voice discipline, and archetype profiles'
+---
+
+## Overview
+
+Timepoint Pro generates dialog using a **per-character approach** where each entity generates their own turns via independent LLM calls. This is fundamentally different from single-prompt "all characters talking" generation—it produces more natural, differentiated voices and allows for sophisticated persona-derived generation parameters.
+
+## Architecture: LangGraph Pipeline
+
+Dialog synthesis uses a three-node LangGraph pipeline defined in `workflows/dialog_steering.py`:
+
+```
+┌─────────────────┐
+│ steering_node   │  Selects next speaker, mood shift, continuation
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ character_node  │  Generates dialog turn with persona-derived params
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│quality_gate_node│  Three-level evaluation + naturalness scoring
+└─────────────────┘
+```
+
+### Node 1: Steering Node
+
+The steering agent makes three decisions:
+
+1. **Next Speaker Selection** - Who speaks next based on:
+   - Narrative arc position
+   - Recent speaker history (avoid repetition)
+   - Relationship dynamics
+   - Entity energy levels
+
+2. **Mood Shift Detection** - Should emotional tone change?
+   - Conflict escalation
+   - Resolution moments
+   - Tension peaks
+
+3. **Dialog Continuation** - Should dialog continue or end?
+   - Turn count
+   - Narrative completion
+   - Energy budget exhaustion
+
+### Node 2: Character Node
+
+Generates the actual dialog turn with:
+
+**Persona-Derived LLM Parameters:**
+```python
+# From entity tensor state → LLM API params
+temperature = base_temp * (1 + arousal * 0.3)
+top_p = base_top_p * (1 - confidence * 0.1)
+max_tokens = int(base_tokens * energy_factor)
+frequency_penalty = 0.3 * patience
+```
+
+**Fourth Wall Context:**
+- **Back layer** (HOW to speak): True emotional state, withheld knowledge, suppressed impulses
+- **Front layer** (WHAT they know): Filtered knowledge, natural-language relationships
+
+**Voice Discipline Block** (7 principles):
+1. No "I understand your concern" filler
+2. No corporate speak ("moving forward", "circle back")
+3. No therapeutic framing ("I hear you")
+4. No meta-commentary about the conversation
+5. No obvious AI patterns ("It's worth noting that...")
+6. Natural contractions and interruptions
+7. Specific details over vague generalities
+
+### Node 3: Quality Gate Node
+
+Three-level evaluation:
+
+**Level 1: Per-Dialog Evaluation**
+- Narrative advancement score
+- Conflict specificity
+- Voice distinctiveness
+
+**Level 2: Cross-Dialog Evaluation**
+- Progression between conversations
+- Relationship consistency
+- Knowledge flow coherence
+
+**Level 3: Full-Run Coherence**
+- Character arc consistency
+- Causal chain validity
+- Temporal plausibility
+
+**Naturalness Scoring:**
+
+LLM-evaluated on scale 0-10:
+- 0-3: AI-sounding, robotic
+- 4-6: Acceptable but stiff
+- 7-8: Natural conversation
+- 9-10: Indistinguishable from human
+
+Pattern-aware retry triggers naturalness re-evaluation if common AI patterns detected.
+
+## Voice Discipline
+
+The 7-principle voice discipline block prevents AI-sounding output:
+
+### Principle 1: No Therapeutic Filler
+
+❌ **Bad:**
+```
+"I understand your concern, and I want to validate your feelings about this."
+```
+
+✅ **Good:**
+```
+"The data doesn't support that timeline. We need three more weeks."
+```
+
+### Principle 2: No Corporate Speak
+
+❌ **Bad:**
+```
+"Let's circle back on this offline and touch base next week to move forward."
+```
+
+✅ **Good:**
+```
+"I'll send the revised figures Thursday. We can decide then."
+```
+
+### Principle 3: No Meta-Commentary
+
+❌ **Bad:**
+```
+"This is an important conversation to have, and I think we're making progress."
+```
+
+✅ **Good:**
+```
+"The budget's tight, but we can make it work if engineering cuts two features."
+```
+
+### Principle 4: Specific Over Vague
+
+❌ **Bad:**
+```
+"We should consider various approaches and evaluate our options going forward."
+```
+
+✅ **Good:**
+```
+"Deploy to 10% of users Friday. If crash rate stays under 0.1%, full rollout Monday."
+```
+
+### Principle 5: Natural Contractions
+
+❌ **Bad:**
+```
+"I do not think we are ready. We will need more time."
+```
+
+✅ **Good:**
+```
+"We're not ready. Need another week, minimum."
+```
+
+### Principle 6: Grounded in Action
+
+❌ **Bad:**
+```
+"It's worth noting that there are several factors we need to take into account."
+```
+
+✅ **Good:**
+```
+"Revenue's down 12%. We cut marketing or we miss payroll in October."
+```
+
+### Principle 7: Natural Interruption
+
+✅ **Good:**
+```
+"Look, I get what you're saying, but—"
+"The timeline's unrealistic. You know that."
+"Three weeks. That's it. Take it or leave it."
+```
+
+## Archetype Rhetorical Profiles
+
+Timepoint Pro uses 10 archetype profiles defined in `workflows/dialog_archetypes.py` that shape how characters speak:
+
+### Engineer
+
+```python
+{
+  "argument_style": "data-first; cites specific measurements; uses conditional logic",
+  "disagreement_pattern": "asks for the source; names the exact number they dispute",
+  "deflection_style": "redirects to technical subproblem",
+  "sentence_style": "short declarative sentences; technical vocabulary",
+  "never_does": ["make emotional appeals", "appeal to authority without data"],
+  "signature_moves": ["qualifies estimates with error margins"]
+}
+```
+
+**Example dialog:**
+```
+"The O2 scrubber reading was 847 ppm at 14:23. Threshold is 800. 
+We're 6% over spec."
+```
+
+### Executive Director
+
+```python
+{
+  "argument_style": "schedule and budget framing; translates to downstream impact",
+  "disagreement_pattern": "reframes as resource problem; offers to table for future",
+  "deflection_style": "elevates ('let's not get into the weeds')",
+  "sentence_style": "longer compound sentences; management vocabulary",
+  "never_does": ["admit uncertainty in front of subordinates"],
+  "signature_moves": ["ends turns with action items or deadlines"]
+}
+```
+
+**Example dialog:**
+```
+"We'll schedule a deep dive for Q2, but right now we need to focus on 
+the deliverables we committed to the board. Sarah, can you have the 
+revised timeline to me by Thursday?"
+```
+
+### Military Commander
+
+```python
+{
+  "argument_style": "chain of command framing; mission risk vs crew safety",
+  "disagreement_pattern": "asks for options not problems",
+  "deflection_style": "defers to protocol or asks for formal assessment",
+  "sentence_style": "crisp, clipped sentences; active voice; minimal hedging",
+  "never_does": ["show fear in front of crew"],
+  "signature_moves": ["asks 'what are our options'"]
+}
+```
+
+**Example dialog:**
+```
+"Status report. Now. What are our options?"
+```
+
+### Scientist
+
+```python
+{
+  "argument_style": "hypothesis-driven; cites studies and precedent",
+  "disagreement_pattern": "questions methodology; asks about sample size",
+  "deflection_style": "requests more data before committing",
+  "sentence_style": "precise language; hedged claims; avoids absolutes",
+  "never_does": ["claim certainty without evidence"],
+  "signature_moves": ["prefaces claims with confidence level"]
+}
+```
+
+**Example dialog:**
+```
+"The data suggests—with about 75% confidence—that the anomaly is 
+statistical noise, not a systemic failure. We'd need three more samples 
+to rule out contamination."
+```
+
+### Politician
+
+```python
+{
+  "argument_style": "constituency framing; appeals to shared values",
+  "disagreement_pattern": "pivots to adjacent issue; acknowledges concern",
+  "deflection_style": "broadens scope ('the real question is...')",
+  "sentence_style": "rhythmic phrasing; inclusive language",
+  "never_does": ["give a simple yes or no"],
+  "signature_moves": ["triangulates between factions"]
+}
+```
+
+**Example dialog:**
+```
+"Look, we all want the same thing here—a system that works for everyone. 
+The question isn't whether we act, it's how we balance competing priorities 
+while keeping faith with the people who sent us here."
+```
+
+### Additional Archetypes
+
+- **Lawyer**: Precedent-based, identifies liability, if-then consequences
+- **Diplomat**: Relationship-first, seeks face-saving solutions, avoids binary choices
+- **Safety Officer**: Risk-based, cites regulations, demands written sign-offs
+- **Doctor**: Differential diagnosis, weighs risks vs benefits, clinical precision
+- **Journalist**: Source-based, asks follow-ups, looks for inconsistencies
+
+See `workflows/dialog_archetypes.py` for complete profiles.
+
+## Voice Anti-Exemplars
+
+Each archetype includes a **voice anti-exemplar**—an example of bad AI-generated dialog for that archetype:
+
+**Engineer anti-exemplar:**
+```
+"The data serves as a testament to the transformative potential of our 
+monitoring systems, showcasing the intricate interplay between sensor 
+readings and operational outcomes."
+```
+
+This trains the LLM to avoid verbose, abstract, "showcasing"-heavy language.
+
+## Params2Persona Waveform
+
+Entity tensor state maps to LLM API parameters per turn:
+
+```python
+# Arousal affects temperature (more aroused = more varied)
+temperature = base_temperature * (1 + emotional_arousal * 0.3)
+
+# Fatigue affects output length
+max_tokens = int(base_max_tokens * (energy_budget / 100))
+
+# Confidence affects top_p sampling
+top_p = base_top_p * (1 - decision_confidence * 0.1)
+
+# Patience affects frequency penalty
+frequency_penalty = 0.3 * (patience_threshold / 100)
+
+# ADPRS phi scales all parameters
+all_params *= adprs_phi_current
+```
+
+This creates a **waveform** where characters speak differently based on their internal state:
+- High arousal → higher temperature → more unpredictable speech
+- Low energy → shorter responses
+- Low confidence → more exploratory sampling
+- Low patience → more repetitive (self-interrupting)
+
+## Fourth Wall Context
+
+Dialog generation uses a two-layer context structure:
+
+### Back Layer (Hidden from Output)
+
+```python
+back_layer = {
+    "true_emotional_state": "Frustrated by Webb's dismissal",
+    "withheld_knowledge": ["O2 reading at 847 ppm", "Sensor calibration date overdue"],
+    "suppressed_impulses": ["Want to escalate to mission control"],
+    "relationship_tension": {"Webb": -0.3}
+}
+```
+
+Shapes HOW the character speaks (tone, indirectness, restraint).
+
+### Front Layer (Visible in Context)
+
+```python
+front_layer = {
+    "known_facts": ["Mission timeline", "Crew roles", "Current status"],
+    "relationships": ["Webb: commander (strained)", "Chen: colleague (trusted)"],
+    "recent_events": ["Sensor alert 2 hours ago", "Disagreement with Webb"]
+}
+```
+
+Defines WHAT the character can reference.
+
+**Portal Mode Filtering:**
+
+In PORTAL mode, front layer filters out knowledge from causally inaccessible timepoints:
+
+```python
+# At timepoint T3, character doesn't know about events at T5
+if timepoint_id < knowledge_first_exposed_at:
+    filtered_knowledge.remove(knowledge_item)
+```
+
+## Knowledge Extraction (M19)
+
+Dialog synthesis integrates with the M19 knowledge extraction agent:
+
+**Old (deprecated):**
+```python
+# Naive capitalization-based extraction
+knowledge = [word for word in content.split() if word[0].isupper()]
+# Result: ["We'll", "Thanks", "What"] ❌
+```
+
+**New (M19 agent):**
+```python
+from workflows.knowledge_extraction import extract_knowledge_from_dialog
+
+knowledge_items = extract_knowledge_from_dialog(
+    dialog_turns=turns,
+    context={"entities": entities, "timepoint": timepoint}
+)
+# Result: [
+#   {"content": "O2 scrubber threshold is 800 ppm", 
+#    "category": "fact", "confidence": 0.9},
+#   {"content": "Sensor calibration overdue", 
+#    "category": "observation", "confidence": 0.7}
+# ]
+```
+
+The M19 agent:
+- Extracts complete semantic units (not single words)
+- Understands context from causal graph
+- Categorizes knowledge (fact, decision, opinion, plan)
+- Assigns confidence and causal relevance scores
+
+## Character Arc Tracking
+
+Dialog synthesis updates character arcs after each conversation:
+
+```python
+{
+  "dialog_attempts": [
+    {
+      "timepoint_id": "T2",
+      "tactic_used": "data_argument",
+      "target_entity": "Webb",
+      "outcome": "dismissed",
+      "argument_summary": "Presented O2 readings showing..."
+    }
+  ],
+  "trust_ledger": {
+    "Webb": -0.15,  # Trust decreased after dismissal
+    "Chen": 0.03    # Trust increased after support
+  },
+  "unspoken_accumulation": [
+    {
+      "content": "O2 fault reading",
+      "urgency": 0.8,  # Grows each time it's not expressed
+      "first_formed": "T1"
+    }
+  ]
+}
+```
+
+**Tactic vocabulary:**
+- `data_argument`, `emotional_appeal`, `authority_claim`
+- `humor_deflection`, `silence_withdrawal`
+- `procedural_challenge`, `alliance_appeal`, `threat_escalation`
+
+**Outcome vocabulary:**
+- `accepted`, `dismissed`, `deferred`, `ignored`, `partially_acknowledged`
+
+This feeds back into future dialog generation—characters change tactics after repeated failures.
+
+## Emotional State Persistence
+
+Dialog synthesis updates emotional state in entity metadata:
+
+```python
+# Compute dialog impact
+dialog_impact = analyze_dialog_emotional_impact(turns, speaker_id)
+
+# Apply arousal decay (prevents saturation)
+arousal_baseline = 0.3
+arousal_decay_rate = 0.15
+decayed_arousal = baseline + (current - baseline) * (1 - decay_rate)
+
+# Update entity
+new_valence = current_valence + dialog_impact["valence_delta"]
+new_arousal = decayed_arousal + dialog_impact["arousal_delta"]
+
+# Clamp to valid ranges
+new_valence = max(-1.0, min(1.0, new_valence))
+new_arousal = max(0.0, min(1.0, new_arousal))
+```
+
+Without arousal decay, entities saturate at 1.0 arousal within a few dialogs.
+
+## Best Practices
+
+### Use Archetype Profiles
+
+Assign appropriate archetypes to entities:
+
+```json
+"entity_metadata": {
+  "archetype_id": "engineer",
+  "role": "Flight Engineer"
+}
+```
+
+### Calibrate Dialog Length
+
+Control turn count and energy drain:
+
+```python
+max_turns = 10  # Prevent endless conversations
+energy_drain_per_turn = 0.02  # Adjust based on scenario intensity
+```
+
+### Enable Quality Gates
+
+Use semantic evaluation for critical scenarios:
+
+```python
+quality_config = {
+    "enable_semantic_evaluation": True,
+    "naturalness_threshold": 7.0,
+    "max_retries": 2
+}
+```
+
+### Sync TTM ↔ Cognitive
+
+Ensure trained tensor values propagate to dialog:
+
+```python
+# Before dialog: TTM → Cognitive
+_sync_ttm_to_cognitive(entity)
+
+# After dialog: Cognitive → TTM (learning)
+_sync_cognitive_to_ttm(entity, updated_cognitive, store)
+```
+
+## Next Steps
+
+- Explore [Templates](/guides/templates) to configure dialog synthesis settings
+- Read [Validation](/guides/validation) to understand dialog quality validators
+- See [Cost Optimization](/guides/cost-optimization) for fidelity strategies that affect dialog generation

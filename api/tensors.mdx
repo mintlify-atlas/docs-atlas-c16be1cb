@@ -1,0 +1,399 @@
+---
+title: 'Tensors API'
+description: 'CRUD operations for cognitive tensors'
+---
+
+## Overview
+
+The Tensors API provides endpoints for creating, reading, updating, and deleting cognitive tensors. Tensors are 20-dimensional structures containing context (8), biology (4), and behavior (8) dimensions.
+
+## Tensor Structure
+
+Each tensor contains:
+
+- **tensor_id**: Unique identifier
+- **entity_id**: Entity this tensor represents
+- **world_id**: World/simulation context (optional)
+- **values**: 20-dimensional tensor values (context, biology, behavior)
+- **maturity**: Training maturity score (0.0-1.0)
+- **training_cycles**: Number of training iterations
+- **description**: Natural language description for semantic search
+- **category**: Category path (e.g., "profession/detective")
+- **access_level**: Permission level (private/shared/public)
+- **owner_id**: User who owns this tensor
+
+## List Tensors
+
+Get a paginated list of tensors you have access to.
+
+```bash GET /tensors
+curl -X GET "http://localhost:8080/tensors?page=1&page_size=50" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="page" type="integer" default="1">
+  Page number (1-indexed)
+</ParamField>
+
+<ParamField query="page_size" type="integer" default="50">
+  Number of tensors per page (1-100)
+</ParamField>
+
+<ParamField query="entity_id" type="string">
+  Filter by entity ID
+</ParamField>
+
+<ParamField query="world_id" type="string">
+  Filter by world ID
+</ParamField>
+
+### Response
+
+<ResponseField name="tensors" type="array">
+  Array of tensor objects
+</ResponseField>
+
+<ResponseField name="total" type="integer">
+  Total number of accessible tensors
+</ResponseField>
+
+<ResponseField name="page" type="integer">
+  Current page number
+</ResponseField>
+
+<ResponseField name="page_size" type="integer">
+  Page size used
+</ResponseField>
+
+```json
+{
+  "tensors": [
+    {
+      "tensor_id": "tensor-abc123",
+      "entity_id": "entity-001",
+      "world_id": "world-sim-01",
+      "values": {
+        "context": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+        "biology": [0.1, 0.2, 0.3, 0.4],
+        "behavior": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+      },
+      "maturity": 0.95,
+      "training_cycles": 100,
+      "version": 5,
+      "description": "Detective persona with analytical thinking",
+      "category": "profession/detective",
+      "access_level": "private",
+      "owner_id": "user-123",
+      "created_at": "2026-03-01T10:00:00Z",
+      "updated_at": "2026-03-06T12:00:00Z"
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+## Create Tensor
+
+Create a new tensor. The current user becomes the owner.
+
+```bash POST /tensors
+curl -X POST http://localhost:8080/tensors \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entity_id": "entity-001",
+    "world_id": "world-sim-01",
+    "values": {
+      "context": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+      "biology": [0.1, 0.2, 0.3, 0.4],
+      "behavior": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    },
+    "description": "Detective persona with analytical thinking",
+    "category": "profession/detective",
+    "maturity": 0.95,
+    "training_cycles": 100,
+    "access_level": "private"
+  }'
+```
+
+### Request Body
+
+<ParamField body="tensor_id" type="string">
+  Optional tensor ID (generated if not provided)
+</ParamField>
+
+<ParamField body="entity_id" type="string" required>
+  Entity this tensor belongs to
+</ParamField>
+
+<ParamField body="world_id" type="string">
+  World/simulation context
+</ParamField>
+
+<ParamField body="values" type="object" required>
+  Tensor dimension values
+  <ParamField body="values.context" type="array" required>
+    Context dimensions (8 values, 0.0-1.0)
+  </ParamField>
+  <ParamField body="values.biology" type="array" required>
+    Biology dimensions (4 values, 0.0-1.0)
+  </ParamField>
+  <ParamField body="values.behavior" type="array" required>
+    Behavior dimensions (8 values, 0.0-1.0)
+  </ParamField>
+</ParamField>
+
+<ParamField body="description" type="string">
+  Natural language description for RAG
+</ParamField>
+
+<ParamField body="category" type="string">
+  Category path (e.g., "profession/detective")
+</ParamField>
+
+<ParamField body="maturity" type="number" default="0.0">
+  Maturity score (0.0-1.0)
+</ParamField>
+
+<ParamField body="training_cycles" type="integer" default="0">
+  Number of training cycles
+</ParamField>
+
+<ParamField body="access_level" type="string" default="private">
+  Access level: `private`, `shared`, or `public`
+</ParamField>
+
+### Response
+
+**Status**: `201 Created`
+
+Returns the created tensor object.
+
+## Get Tensor
+
+Get a single tensor by ID.
+
+```bash GET /tensors/{tensor_id}
+curl -X GET http://localhost:8080/tensors/tensor-abc123 \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+Returns a tensor object (same structure as create response).
+
+### Errors
+
+- `404 Not Found` - Tensor doesn't exist
+- `403 Forbidden` - No read access to tensor
+
+## Update Tensor
+
+Update an existing tensor. Requires write permission (owner only).
+
+```bash PUT /tensors/{tensor_id}
+curl -X PUT http://localhost:8080/tensors/tensor-abc123 \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "maturity": 0.98,
+    "training_cycles": 150,
+    "description": "Updated description"
+  }'
+```
+
+### Request Body
+
+All fields are optional. Only provided fields are updated.
+
+<ParamField body="entity_id" type="string">
+  Updated entity ID
+</ParamField>
+
+<ParamField body="world_id" type="string">
+  Updated world ID
+</ParamField>
+
+<ParamField body="values" type="object">
+  Updated tensor values
+</ParamField>
+
+<ParamField body="description" type="string">
+  Updated description
+</ParamField>
+
+<ParamField body="category" type="string">
+  Updated category
+</ParamField>
+
+<ParamField body="maturity" type="number">
+  Updated maturity (0.0-1.0)
+</ParamField>
+
+<ParamField body="training_cycles" type="integer">
+  Updated training cycles
+</ParamField>
+
+<ParamField body="access_level" type="string">
+  Updated access level
+</ParamField>
+
+### Response
+
+Returns the updated tensor object.
+
+### Errors
+
+- `404 Not Found` - Tensor doesn't exist
+- `403 Forbidden` - No write access (not owner)
+
+## Delete Tensor
+
+Delete a tensor. Requires delete permission (owner only).
+
+```bash DELETE /tensors/{tensor_id}
+curl -X DELETE http://localhost:8080/tensors/tensor-abc123 \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+**Status**: `204 No Content`
+
+### Errors
+
+- `404 Not Found` - Tensor doesn't exist
+- `403 Forbidden` - No delete access (not owner)
+
+## Share Tensor
+
+Share a tensor with another user.
+
+```bash POST /tensors/{tensor_id}/share
+curl -X POST http://localhost:8080/tensors/tensor-abc123/share \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user-456"}'
+```
+
+### Request Body
+
+<ParamField body="user_id" type="string" required>
+  User ID to share with
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Tensor shared with user-456"
+}
+```
+
+## Revoke Sharing
+
+Revoke sharing from a user.
+
+```bash DELETE /tensors/{tensor_id}/share/{target_user_id}
+curl -X DELETE http://localhost:8080/tensors/tensor-abc123/share/user-456 \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+```json
+{
+  "message": "Sharing revoked from user-456"
+}
+```
+
+## Set Access Level
+
+Change tensor access level.
+
+```bash PUT /tensors/{tensor_id}/access
+curl -X PUT http://localhost:8080/tensors/tensor-abc123/access \
+  -H "X-API-Key: tp_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{"access_level": "public"}'
+```
+
+### Request Body
+
+<ParamField body="access_level" type="string" required>
+  New access level: `private`, `shared`, or `public`
+</ParamField>
+
+### Response
+
+```json
+{
+  "message": "Access level set to public"
+}
+```
+
+## Fork Tensor
+
+Create a copy of a tensor that you own.
+
+```bash POST /tensors/{tensor_id}/fork
+curl -X POST "http://localhost:8080/tensors/tensor-abc123/fork?new_id=tensor-fork-001" \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Query Parameters
+
+<ParamField query="new_id" type="string">
+  ID for the forked tensor (generated if not provided)
+</ParamField>
+
+### Response
+
+**Status**: `201 Created`
+
+Returns the forked tensor object with updated description.
+
+## Get Statistics
+
+Get database statistics.
+
+```bash GET /tensors/stats/summary
+curl -X GET http://localhost:8080/tensors/stats/summary \
+  -H "X-API-Key: tp_your_api_key_here"
+```
+
+### Response
+
+<ResponseField name="total_tensors" type="integer">
+  Total tensor count
+</ResponseField>
+
+<ResponseField name="operational_count" type="integer">
+  Tensors with maturity >= 0.95
+</ResponseField>
+
+<ResponseField name="training_count" type="integer">
+  Tensors with maturity < 0.95
+</ResponseField>
+
+<ResponseField name="avg_maturity" type="number">
+  Average maturity score
+</ResponseField>
+
+<ResponseField name="total_versions" type="integer">
+  Total version entries
+</ResponseField>
+
+```json
+{
+  "total_tensors": 42,
+  "operational_count": 38,
+  "training_count": 4,
+  "avg_maturity": 0.87,
+  "total_versions": 156
+}
+```

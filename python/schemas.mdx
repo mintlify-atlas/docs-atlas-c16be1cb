@@ -1,0 +1,694 @@
+---
+title: 'Schemas'
+description: 'Pydantic data models and SQLModel schemas for entities, timepoints, and all simulation artifacts'
+icon: 'shapes'
+---
+
+## Overview
+
+The `schemas` module defines all data structures used in Timepoint Pro. Built on SQLModel (Pydantic + SQLAlchemy), these schemas serve as:
+- **ORM models** (database tables)
+- **Validation schemas** (type checking)
+- **API specs** (FastAPI endpoints)
+
+**Module:** `schemas.py`
+
+## Enums
+
+### ResolutionLevel
+
+Entity resolution levels for heterogeneous fidelity (M1).
+
+**Values:**
+```python
+class ResolutionLevel(str, Enum):
+    TENSOR_ONLY = "tensor_only"      # ~200 tokens, compressed state
+    SCENE = "scene"                  # ~500 tokens, scene description
+    GRAPH = "graph"                  # ~1000 tokens, relationship context
+    DIALOG = "dialog"                # ~3000 tokens, full dialog turns
+    TRAINED = "trained"              # ~5000 tokens, trained entity detail
+    FULL_DETAIL = "full_detail"      # ~8000 tokens, maximum detail
+```
+
+**Example:**
+```python
+from schemas import ResolutionLevel, Entity
+
+entity = Entity(
+    entity_id="hamilton",
+    resolution_level=ResolutionLevel.DIALOG
+)
+```
+
+### TemporalMode
+
+Different causal regimes for temporal reasoning (M17).
+
+**Values:**
+```python
+class TemporalMode(str, Enum):
+    FORWARD = "forward"          # Standard causality, no anachronisms
+    DIRECTORIAL = "directorial"  # Narrative structure, dramatic tension
+    BRANCHING = "branching"      # Many-worlds, counterfactuals
+    CYCLICAL = "cyclical"        # Time loops, prophecy
+    PORTAL = "portal"            # Backward inference from endpoint
+```
+
+**Example:**
+```python
+from schemas import TemporalMode, Timeline
+
+timeline = Timeline(
+    timeline_id="timeline_001",
+    temporal_mode=TemporalMode.PORTAL,
+    timepoint_id="tp_endpoint",
+    timestamp=datetime(1791, 12, 31)
+)
+```
+
+### FidelityPlanningMode
+
+How fidelity is allocated across timepoints.
+
+**Values:**
+```python
+class FidelityPlanningMode(str, Enum):
+    PROGRAMMATIC = "programmatic"  # Plan all upfront (deterministic)
+    ADAPTIVE = "adaptive"          # Decide per-step (dynamic)
+    HYBRID = "hybrid"              # Programmatic + adaptive upgrades
+```
+
+### TokenBudgetMode
+
+How token budget is enforced.
+
+**Values:**
+```python
+class TokenBudgetMode(str, Enum):
+    HARD_CONSTRAINT = "hard"        # Fail if budget exceeded
+    SOFT_GUIDANCE = "soft"          # Target budget, allow 110% overage
+    MAX_QUALITY = "max"             # No budget limit
+    ADAPTIVE_FALLBACK = "adaptive"  # Hit budget, exceed if needed
+    ORCHESTRATOR_DIRECTED = "orchestrator"  # Orchestrator decides
+    USER_CONFIGURED = "user"        # User provides exact allocation
+```
+
+## Core Entities
+
+### Entity
+
+Core entity model with resolution levels and metadata.
+
+**Schema:**
+```python
+class Entity(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    entity_id: str = Field(unique=True, index=True)
+    entity_type: str = Field(default="human")
+    timepoint: str | None = Field(default=None, index=True)
+    temporal_span_start: datetime | None = None
+    temporal_span_end: datetime | None = None
+    tensor: str | None = Field(default=None, sa_column=Column(JSON))
+    training_count: int = Field(default=0)
+    query_count: int = Field(default=0)
+    eigenvector_centrality: float = Field(default=0.0)
+    resolution_level: ResolutionLevel = Field(default=ResolutionLevel.TENSOR_ONLY)
+    entity_metadata: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    tensor_maturity: float = Field(default=0.0)
+    tensor_training_cycles: int = Field(default=0)
+```
+
+**Entity Types:**
+- `human`: Human entities
+- `animal`: Animals (M16)
+- `building`: Buildings (M16)
+- `object`: Objects
+- `abstract`: Concepts (M16)
+
+**Example:**
+```python
+from schemas import Entity, ResolutionLevel, CognitiveTensor
+
+entity = Entity(
+    entity_id="alexander_hamilton",
+    entity_type="human",
+    resolution_level=ResolutionLevel.DIALOG,
+    eigenvector_centrality=0.85,
+    entity_metadata={
+        "cognitive_tensor": {
+            "knowledge_state": ["Founded First Bank"],
+            "energy_budget": 85.0,
+            "emotional_valence": 0.3
+        },
+        "personality_traits": [0.8, -0.3, 0.6, 0.9, -0.2]
+    }
+)
+```
+
+**Properties:**
+
+```python
+@property
+def physical_tensor(self) -> PhysicalTensor | None:
+    """Get physical tensor from metadata"""
+    # Returns PhysicalTensor or None
+
+@property
+def cognitive_tensor(self) -> CognitiveTensor | None:
+    """Get cognitive tensor from metadata"""
+    # Returns CognitiveTensor or None
+```
+
+### Timepoint
+
+Temporal event with causal chain.
+
+**Schema:**
+```python
+class Timepoint(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    timepoint_id: str = Field(unique=True, index=True)
+    timeline_id: str | None = Field(default=None, index=True)
+    timestamp: datetime
+    event_description: str
+    entities_present: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    causal_parent: str | None = Field(default=None, index=True)
+    resolution_level: ResolutionLevel = Field(default=ResolutionLevel.SCENE)
+    run_id: str | None = Field(default=None, index=True)
+```
+
+**Example:**
+```python
+from schemas import Timepoint, ResolutionLevel
+from datetime import datetime
+
+timepoint = Timepoint(
+    timepoint_id="tp_001",
+    timeline_id="timeline_baseline",
+    timestamp=datetime(1787, 5, 25, 9, 0),
+    event_description="Constitutional Convention begins",
+    entities_present=["hamilton", "madison", "washington"],
+    causal_parent=None,
+    resolution_level=ResolutionLevel.DIALOG,
+    run_id="run_123"
+)
+```
+
+### ExposureEvent
+
+Knowledge exposure tracking (M3).
+
+**Schema:**
+```python
+class ExposureEvent(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    entity_id: str = Field(foreign_key="entity.entity_id", index=True)
+    event_type: str  # witnessed, learned, told, experienced
+    information: str
+    source: str | None = None
+    timestamp: datetime
+    confidence: float = Field(default=1.0)
+    timepoint_id: str | None = Field(default=None, index=True)
+    run_id: str | None = Field(default=None, index=True)
+```
+
+**Event Types:**
+- `witnessed`: Directly observed
+- `learned`: Taught or studied
+- `told`: Communicated by another entity
+- `experienced`: Personally experienced
+- `initial`: Starting knowledge (from scene specification)
+
+**Example:**
+```python
+from schemas import ExposureEvent
+from datetime import datetime
+
+event = ExposureEvent(
+    entity_id="alexander_hamilton",
+    event_type="told",
+    information="Madison supports bicameral legislature",
+    source="james_madison",
+    timestamp=datetime(1787, 5, 25, 14, 30),
+    confidence=0.9,
+    timepoint_id="tp_003",
+    run_id="run_123"
+)
+```
+
+## Tensors
+
+### TTMTensor
+
+Timepoint Tensor Model - context, biology, behavior.
+
+**Schema:**
+```python
+class TTMTensor(SQLModel):
+    context_vector: bytes  # Serialized numpy array (knowledge)
+    biology_vector: bytes  # Serialized numpy array (age, health)
+    behavior_vector: bytes  # Serialized numpy array (personality, patterns)
+```
+
+**Example:**
+```python
+import numpy as np
+from schemas import TTMTensor
+
+context = np.random.randn(128)  # Knowledge embeddings
+biology = np.array([32.0, 0.95, 0.0, 1.0])  # age, health, pain, mobility
+behavior = np.random.randn(64)  # Personality patterns
+
+ttm = TTMTensor.from_arrays(context, biology, behavior)
+context_restored, biology_restored, behavior_restored = ttm.to_arrays()
+```
+
+### PhysicalTensor
+
+Physical state - age, health, pain, mobility.
+
+**Schema:**
+```python
+class PhysicalTensor(BaseModel):
+    age: float
+    health_status: float = 1.0  # 0.0-1.0
+    pain_level: float = 0.0  # 0.0-1.0
+    pain_location: str | None = None
+    fever: float = 36.5  # Celsius
+    mobility: float = 1.0  # 0.0-1.0
+    stamina: float = 1.0  # 0.0-1.0
+    sensory_acuity: dict[str, float] = {}  # vision, hearing, etc.
+    location: tuple[float, float] | None = None
+```
+
+**Example:**
+```python
+from schemas import PhysicalTensor
+
+physical = PhysicalTensor(
+    age=32.5,
+    health_status=0.95,
+    pain_level=0.1,
+    pain_location="lower_back",
+    mobility=0.9,
+    stamina=0.8,
+    sensory_acuity={"vision": 1.0, "hearing": 0.95}
+)
+```
+
+### CognitiveTensor
+
+Cognitive state - knowledge, emotions, energy.
+
+**Schema:**
+```python
+class CognitiveTensor(BaseModel):
+    knowledge_state: list[str] = []
+    emotional_valence: float = 0.0  # -1.0 to 1.0
+    emotional_arousal: float = 0.0  # 0.0 to 1.0
+    energy_budget: float = 100.0
+    decision_confidence: float = 0.8
+    patience_threshold: float = 50.0
+    risk_tolerance: float = 0.5
+    social_engagement: float = 0.8
+```
+
+**Example:**
+```python
+from schemas import CognitiveTensor
+
+cognitive = CognitiveTensor(
+    knowledge_state=[
+        "Founded First Bank of United States",
+        "Advocated for strong central government",
+        "Wrote majority of Federalist Papers"
+    ],
+    emotional_valence=0.3,
+    emotional_arousal=0.6,
+    energy_budget=85.0,
+    decision_confidence=0.9,
+    risk_tolerance=0.8
+)
+```
+
+## Dialog
+
+### DialogTurn
+
+Single turn in a dialog conversation.
+
+**Schema:**
+```python
+class DialogTurn(BaseModel):
+    speaker: str  # entity_id
+    content: str
+    timestamp: datetime
+    emotional_tone: str | None = None
+    knowledge_references: list[str] = []
+    confidence: float | None = 1.0
+    physical_state_influence: str | None = None
+```
+
+**Example:**
+```python
+from schemas import DialogTurn
+from datetime import datetime
+
+turn = DialogTurn(
+    speaker="alexander_hamilton",
+    content="We need a strong central bank to stabilize the economy.",
+    timestamp=datetime(1791, 1, 15, 10, 0),
+    emotional_tone="confident",
+    knowledge_references=["banking_expertise", "financial_crisis_1786"],
+    confidence=0.95
+)
+```
+
+### DialogData
+
+Structured dialog with metadata.
+
+**Schema:**
+```python
+class DialogData(BaseModel):
+    turns: list[DialogTurn]
+    total_duration: int | None = None  # seconds
+    information_exchanged: list[str] = []
+    relationship_impacts: dict[str, float] = {}  # entity_pair -> delta
+    atmosphere_evolution: list[dict[str, float]] = []
+```
+
+### Dialog (Database)
+
+Persisted dialog conversation.
+
+**Schema:**
+```python
+class Dialog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    dialog_id: str = Field(unique=True, index=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id", index=True)
+    participants: str = Field(sa_column=Column(JSON))  # JSON list
+    turns: str = Field(sa_column=Column(JSON))  # JSON list of DialogTurn
+    context_used: str = Field(sa_column=Column(JSON))  # JSON dict
+    duration_seconds: int | None = None
+    information_transfer_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    run_id: str | None = Field(default=None, index=True)
+```
+
+## Relationships
+
+### RelationshipMetrics
+
+Quantified relationship metrics.
+
+**Schema:**
+```python
+class RelationshipMetrics(BaseModel):
+    shared_knowledge: int = 0
+    belief_alignment: float = 0.0  # -1.0 to 1.0
+    interaction_count: int = 0
+    trust_level: float = 0.5  # 0.0 to 1.0
+    emotional_bond: float = 0.0  # -1.0 to 1.0
+    power_dynamic: float = 0.0  # -1.0 to 1.0 (-1 = entity_a subordinate)
+```
+
+### RelationshipTrajectory
+
+Relationship evolution over time (M13).
+
+**Schema:**
+```python
+class RelationshipTrajectory(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    trajectory_id: str = Field(unique=True, index=True)
+    entity_a: str = Field(index=True)
+    entity_b: str = Field(index=True)
+    start_timepoint: str
+    end_timepoint: str
+    states: str = Field(sa_column=Column(JSON))  # List of RelationshipState
+    overall_trend: str  # "improving", "deteriorating", "stable", "volatile"
+    key_events: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    relationship_type: str | None = None  # "ally", "rival", etc.
+    current_strength: float | None = None
+    context_summary: str | None = None
+```
+
+## Prospection (M15)
+
+### Expectation
+
+Entity's expectation about future event.
+
+**Schema:**
+```python
+class Expectation(BaseModel):
+    predicted_event: str
+    subjective_probability: float  # 0.0-1.0
+    desired_outcome: bool
+    preparation_actions: list[str] = []
+    confidence: float = 1.0
+    time_horizon_days: int = 30
+```
+
+### ProspectiveState
+
+Entity's forecasts and expectations.
+
+**Schema:**
+```python
+class ProspectiveState(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    prospective_id: str = Field(unique=True, index=True)
+    entity_id: str = Field(foreign_key="entity.entity_id", index=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id", index=True)
+    forecast_horizon_days: int = 30
+    expectations: str = Field(sa_column=Column(JSON))  # List[Expectation]
+    contingency_plans: str = Field(sa_column=Column(JSON), default_factory=dict)
+    anxiety_level: float = 0.0
+    forecast_confidence: float = 1.0
+    withheld_knowledge: str = Field(default="[]", sa_column=Column(JSON))
+    suppressed_impulses: str = Field(default="[]", sa_column=Column(JSON))
+    episodic_memory: str = Field(default="[]", sa_column=Column(JSON))
+    rumination_topics: str = Field(default="[]", sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=datetime.utcnow)
+```
+
+## Timelines (M12)
+
+### Timeline
+
+Timeline with branching support.
+
+**Schema:**
+```python
+class Timeline(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    timeline_id: str = Field(unique=True, index=True)
+    parent_timeline_id: str | None = Field(default=None, foreign_key="timeline.timeline_id")
+    branch_point: str | None = Field(default=None)
+    intervention_description: str | None = Field(default=None)
+    temporal_mode: TemporalMode = Field(default=TemporalMode.FORWARD)
+    timepoint_id: str = Field(unique=True, index=True)
+    timestamp: datetime
+    resolution: str  # year, month, day, hour
+    entities_present: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    events: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    training_status: str = Field(default="untrained")
+    graph_data: str | None = Field(default=None, sa_column=Column(JSON))
+```
+
+### Intervention
+
+Counterfactual modification.
+
+**Schema:**
+```python
+class Intervention(BaseModel):
+    type: str  # "entity_removal", "entity_modification", etc.
+    target: str  # entity_id or event_id
+    parameters: dict[str, Any] = {}
+    description: str = ""
+```
+
+### BranchComparison
+
+Timeline comparison results.
+
+**Schema:**
+```python
+class BranchComparison(BaseModel):
+    baseline_timeline: str
+    counterfactual_timeline: str
+    divergence_point: str | None
+    metrics: dict[str, dict[str, float]] = {}
+    causal_explanation: str = ""
+    key_events_differed: list[str] = []
+    entity_states_differed: list[str] = []
+```
+
+## Animistic Entities (M16)
+
+### AnimalEntity
+
+**Schema:**
+```python
+class AnimalEntity(BaseModel):
+    species: str
+    biological_state: dict[str, float] = {}
+    training_level: float = 0.0
+    goals: list[str] = []
+    sensory_capabilities: dict[str, float] = {}
+    physical_capabilities: dict[str, float] = {}
+```
+
+### BuildingEntity
+
+**Schema:**
+```python
+class BuildingEntity(BaseModel):
+    structural_integrity: float = 1.0
+    capacity: int = 0
+    age: int = 0
+    maintenance_state: float = 1.0
+    constraints: list[str] = []
+    affordances: list[str] = []
+```
+
+### AbstractEntity
+
+**Schema:**
+```python
+class AbstractEntity(BaseModel):
+    propagation_vector: list[float] = []
+    intensity: float = 1.0
+    carriers: list[str] = []
+    decay_rate: float = 0.01
+    coherence: float = 1.0
+    manifestation_forms: list[str] = []
+```
+
+## Scene Entities (M10)
+
+### EnvironmentEntity
+
+**Schema:**
+```python
+class EnvironmentEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    location: str
+    capacity: int
+    ambient_temperature: float
+    lighting_level: float  # 0.0-1.0
+    weather: str | None = None
+    architectural_style: str | None = None
+    acoustic_properties: str | None = None
+```
+
+### AtmosphereEntity
+
+**Schema:**
+```python
+class AtmosphereEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    tension_level: float  # 0.0-1.0
+    formality_level: float  # 0.0-1.0
+    emotional_valence: float  # -1.0 to 1.0
+    emotional_arousal: float  # 0.0-1.0
+    social_cohesion: float  # 0.0-1.0
+    energy_level: float  # 0.0-1.0
+```
+
+### CrowdEntity
+
+**Schema:**
+```python
+class CrowdEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    size: int
+    density: float  # 0.0-1.0
+    mood_distribution: str = Field(sa_column=Column(JSON))
+    movement_pattern: str  # "static", "flowing", "agitated", "orderly"
+    demographic_composition: str | None = Field(default=None, sa_column=Column(JSON))
+    noise_level: float  # 0.0-1.0
+```
+
+## Convergence
+
+### ConvergenceSet
+
+Cross-run causal graph comparison.
+
+**Schema:**
+```python
+class ConvergenceSet(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    set_id: str = Field(unique=True, index=True)
+    template_id: str | None = Field(default=None, index=True)
+    run_ids: str = Field(sa_column=Column(JSON))
+    run_count: int = Field(default=2)
+    convergence_score: float = Field(default=0.0)  # Mean Jaccard [0-1]
+    min_similarity: float = Field(default=0.0)
+    max_similarity: float = Field(default=0.0)
+    robustness_grade: str = Field(default="F")  # A/B/C/D/F
+    consensus_edge_count: int = Field(default=0)
+    contested_edge_count: int = Field(default=0)
+    divergence_points: str = Field(default="[]", sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    extra_data: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+```
+
+## LLM Schemas
+
+### EntityPopulation
+
+LLM response for entity population.
+
+**Schema:**
+```python
+class EntityPopulation(BaseModel):
+    entity_id: str = ""
+    knowledge_state: list[str] = []
+    energy_budget: float = 50.0
+    personality_traits: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+    temporal_awareness: str = "present"
+    confidence: float = 0.5
+```
+
+### ValidationResult
+
+LLM validation response.
+
+**Schema:**
+```python
+class ValidationResult(BaseModel):
+    is_valid: bool
+    violations: list[str]
+    confidence: float
+    reasoning: str
+```
+
+## Best Practices
+
+1. **Use type hints** for all fields
+2. **Provide defaults** for optional fields
+3. **Use Field()** for constraints and metadata
+4. **Index foreign keys** for performance
+5. **Use JSON columns** for flexible metadata
+6. **Validate with Pydantic** before database insertion
+7. **Use enums** for constrained string values
+8. **Track run_id** for convergence analysis
+9. **Set created_at/updated_at** for temporal tracking
+10. **Use SQLModel properties** for computed fields
+
+## Related
+
+- [Storage](/python/storage) - Database operations
+- [LLM Client](/python/llm-client) - LLM integration
+- [Orchestrator](/python/orchestrator) - Scene compilation
+- [Workflows](/python/workflows) - Entity training

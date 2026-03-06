@@ -1,0 +1,450 @@
+---
+title: "Infrastructure"
+description: "M18 - Intelligent model selection and cost optimization"
+---
+
+## The Problem
+
+Different actions have different requirements:
+
+- **Dialog synthesis** needs conversational fluency
+- **Mathematical reasoning** needs strong logical capabilities
+- **JSON generation** needs structured output reliability
+- **Temporal reasoning** needs causal inference
+
+Using one model for everything is wasteful and suboptimal.
+
+## M18: Intelligent Model Selection
+
+Capability-based model selection that routes actions to **optimal LLMs**.
+
+**Key principle**: Match action type to model capabilities, with automatic fallbacks and license compliance for commercial synthetic data.
+
+### Core Concepts
+
+#### 16 Action Types
+
+```python
+class ActionType(Enum):
+    ENTITY_POPULATION = auto()       # Generating entity profiles
+    DIALOG_SYNTHESIS = auto()        # Creating realistic conversations
+    TEMPORAL_REASONING = auto()      # Causal chain analysis
+    COUNTERFACTUAL_PREDICTION = auto()  # "What if" scenarios
+    KNOWLEDGE_VALIDATION = auto()    # Checking information consistency
+    SCENE_GENERATION = auto()        # Environment/atmosphere creation
+    RELATIONSHIP_ANALYSIS = auto()   # Inter-entity dynamics
+    PROSPECTION = auto()             # Entity future modeling
+    ANIMISTIC_BEHAVIOR = auto()      # Object/institution agency
+    PORTAL_BACKWARD_REASONING = auto()  # Backward temporal inference
+    PORTAL_PATH_SCORING = auto()     # Evaluating path plausibility
+    CONFIG_GENERATION = auto()       # NL to simulation config
+    TENSOR_COMPRESSION = auto()      # Entity state compression
+    VALIDATION = auto()              # General consistency checks
+    SUMMARIZATION = auto()           # Condensing information
+    KNOWLEDGE_EXTRACTION = auto()    # M19 semantic extraction
+    GENERAL = auto()                 # Catch-all
+```
+
+#### 15 Model Capabilities
+
+```python
+class ModelCapability(Enum):
+    STRUCTURED_JSON = auto()      # Reliable JSON output
+    LONG_FORM_TEXT = auto()       # Extended prose generation
+    DIALOG_GENERATION = auto()    # Natural conversation
+    MATHEMATICAL = auto()         # Numerical reasoning
+    LOGICAL_REASONING = auto()    # Formal logic
+    CAUSAL_REASONING = auto()     # Cause-effect analysis
+    TEMPORAL_REASONING = auto()   # Time-based inference
+    LARGE_CONTEXT = auto()        # 32k+ context window
+    VERY_LARGE_CONTEXT = auto()   # 128k+ context window
+    FAST_INFERENCE = auto()       # Low latency
+    COST_EFFICIENT = auto()       # Low cost per token
+    HIGH_QUALITY = auto()         # Premium output quality
+    CREATIVE = auto()             # Novel generation
+    ANALYTICAL = auto()           # Data analysis
+    INSTRUCTION_FOLLOWING = auto()  # Precise adherence
+```
+
+### Model Registry
+
+**Only open-source models** with licenses permitting commercial synthetic data generation.
+
+| Model | Context | Strengths | License |
+|-------|---------|-----------|---------||
+| **Llama 3.1 8B** | 128k | Fast, cost-efficient | Llama 3.1 |
+| **Llama 3.1 70B** | 128k | Balanced quality/cost, dialog | Llama 3.1 |
+| **Llama 3.1 405B** | 128k | Highest quality | Llama 3.1 |
+| **Llama 4 Scout** | 512k | Multimodal, huge context | Llama 4 |
+| **Qwen 2.5 7B** | 32k | JSON, code, fast | Qwen |
+| **Qwen 2.5 72B** | 128k | Structured output, analytical | Qwen |
+| **QwQ 32B** | 32k | Mathematical, logical reasoning | Qwen |
+| **DeepSeek Chat** | 64k | Balanced, analytical | **MIT** |
+| **DeepSeek R1** | 64k | Deep reasoning, math | **MIT** |
+| **Mistral 7B** | 32k | Fast, cost-efficient | **Apache 2.0** |
+| **Mixtral 8x7B** | 32k | Balanced MoE | **Apache 2.0** |
+| **Mixtral 8x22B** | 64k | High quality MoE | **Apache 2.0** |
+
+### Castaway Colony Example
+
+The template routes **four distinct task types** to specialized models:
+
+| Task | Model | Why |
+|------|-------|-----|
+| O2 depletion calculations | **DeepSeek R1** | Mathematical precision |
+| Radiation exposure modeling | **DeepSeek R1** | Numerical reasoning |
+| Crew interpersonal dialog | **Llama 70B** | Conversational fluency |
+| Command decisions | **Llama 70B** | Natural language generation |
+| Supply inventories | **Qwen 72B** | Reliable structured JSON |
+| Flora analysis reports | **Qwen 72B** | Analytical output |
+| Branch outcome judging | **Llama 405B** | Highest quality evaluation |
+
+**One simulation, four models, each doing what it does best.**
+
+## Selection Algorithm
+
+```python
+def select_model(action: ActionType, prefer_quality=False,
+                 prefer_speed=False, prefer_cost=False) -> str:
+    requirements = ACTION_REQUIREMENTS[action]
+
+    scored_models = []
+    for model_id, profile in MODEL_REGISTRY.items():
+        # Check required capabilities
+        if not requirements.required.issubset(profile.capabilities):
+            continue
+
+        # Score based on preferred capabilities
+        score = len(requirements.preferred & profile.capabilities)
+
+        # Apply preference weights
+        if prefer_quality:
+            score += profile.relative_quality * 2
+        if prefer_speed:
+            score += profile.relative_speed * 2
+        if prefer_cost:
+            score += (1 - profile.relative_cost) * 2
+
+        scored_models.append((score, model_id))
+
+    return max(scored_models)[1]  # Return highest-scoring model
+```
+
+### Action → Capability Mappings
+
+Examples from the system:
+
+```python
+ActionType.DIALOG_SYNTHESIS: {
+    "required": {DIALOG_GENERATION, LONG_FORM_TEXT},
+    "preferred": {CREATIVE, HIGH_QUALITY, LARGE_CONTEXT},
+    "min_context_tokens": 8192,
+}
+
+ActionType.KNOWLEDGE_EXTRACTION: {
+    "required": {STRUCTURED_JSON, LOGICAL_REASONING},
+    "preferred": {HIGH_QUALITY, CAUSAL_REASONING, LARGE_CONTEXT},
+    "min_context_tokens": 16384,
+}
+
+ActionType.PORTAL_BACKWARD_REASONING: {
+    "required": {CAUSAL_REASONING, TEMPORAL_REASONING},
+    "preferred": {HIGH_QUALITY, LOGICAL_REASONING, LARGE_CONTEXT},
+    "min_context_tokens": 32768,
+}
+
+ActionType.COUNTERFACTUAL_PREDICTION: {
+    "required": {CAUSAL_REASONING, LOGICAL_REASONING},
+    "preferred": {HIGH_QUALITY, ANALYTICAL, TEMPORAL_REASONING},
+    "min_context_tokens": 16384,
+}
+```
+
+## Fallback Chains
+
+If the primary model fails, automatic retry with alternatives.
+
+```python
+def get_fallback_chain(action: ActionType, length: int = 3) -> List[str]:
+    """Returns ordered list of models to try for an action."""
+    primary = select_model(action)
+    alternatives = [
+        select_model(action, prefer_cost=True),   # Cost fallback
+        select_model(action, prefer_speed=True),  # Speed fallback
+    ]
+    return [primary] + [m for m in alternatives if m != primary][:length-1]
+```
+
+### Integration with LLMService
+
+```python
+from llm_service import LLMService, ActionType
+
+service = LLMService(config)
+
+# Action-aware call with automatic model selection
+response = service.call_with_action(
+    action=ActionType.DIALOG_SYNTHESIS,
+    system="Generate realistic dialog",
+    user="Two founders discussing a pivot",
+    use_fallback_chain=True  # Retry with alternatives on failure
+)
+
+# Structured output with appropriate model
+entity = service.structured_call_with_action(
+    action=ActionType.ENTITY_POPULATION,
+    system="Generate entity profile",
+    user="Create a skeptical board member",
+    schema=EntityProfile
+)
+```
+
+## Response Parsing
+
+`ResponseParser` in `llm_service/response_parser.py` extracts JSON from LLM responses using a **three-stage pipeline**:
+
+### Stage 1: Markdown Code Blocks
+
+Matches ` ```json ... ``` ` fences first.
+
+### Stage 2: Bracket-Depth Matching
+
+Walks the response character-by-character tracking:
+- Bracket depth
+- String boundaries (`"..."`)
+- Escape sequences (`\"`)
+
+Finds the first balanced `{...}` or `[...]` structure.
+
+### Stage 3: Whole-Text Fallback
+
+Tries `json.loads()` on the stripped response.
+
+Bracket-depth matching handles common LLM failure modes:
+- Text before/after JSON
+- Truncated responses
+- Brackets inside string values
+- Nested structures
+
+Failed parses are classified as `INVALID_JSON` by the error handler and retried with exponential backoff.
+
+## License Compliance
+
+All models in the registry permit commercial use. However, not all permit unrestricted use of outputs as **training data**.
+
+### Unrestricted for Training Data
+
+Outputs can train any model:
+
+- **MIT** (DeepSeek Chat, DeepSeek R1): Most permissive, no restrictions
+- **Apache 2.0** (Mistral 7B, Mixtral 8x7B, Mixtral 8x22B): Permissive, attribution required
+
+### Restricted for Training Data
+
+- **Llama 3.1/4**: Commercial use allowed, but Meta's license **prohibits using Llama outputs to train non-Llama models**
+  - ✅ Use for simulation
+  - ✅ Use outputs to fine-tune a Llama model
+  - ❌ Use outputs to fine-tune DeepSeek/Qwen/Mistral/custom models
+- **Qwen**: Commercial use allowed, permissive for most training uses
+- **Google Gemini**: TOS restricts synthetic data generation entirely (opt-in only via `--gemini-flash`)
+
+### Training-Safe Model Selection
+
+If you intend to use simulation outputs as training data:
+
+```python
+# Pass for_training_data=True
+model = select_model(action, for_training_data=True)
+
+# Or get training-safe models explicitly
+training_safe = get_training_safe_models()
+# Returns: ["deepseek-chat", "deepseek-r1", "mistral-7b", "mixtral-8x7b", "mixtral-8x22b"]
+```
+
+These filter to **MIT/Apache-2.0 models only**.
+
+### Models Explicitly Excluded
+
+- **OpenAI** (usage restrictions)
+- **Anthropic** (synthetic data restrictions)
+
+## Free Model Support
+
+OpenRouter offers a rotating selection of free models (identified by `:free` suffix).
+
+### FreeModelSelector
+
+```python
+from llm import FreeModelSelector
+
+selector = FreeModelSelector(api_key)
+selector.list_free_models()           # Show all available free models
+selector.get_best_free_model()        # Quality-focused (Qwen 235B, Llama 70B)
+selector.get_fastest_free_model()     # Speed-focused (Gemini Flash, small models)
+```
+
+### CLI Usage
+
+```bash
+python run_all_mechanism_tests.py --free           # Best quality free model
+python run_all_mechanism_tests.py --free-fast      # Fastest free model
+python run_all_mechanism_tests.py --list-free-models  # Show available
+```
+
+**Note**: Free models have more restrictive rate limits and availability may change without notice.
+
+## Rate Limiting
+
+From `llm.py:17-149`:
+
+### RateLimiter Class
+
+Thread-safe token bucket rate limiter for API calls.
+
+**Two modes**:
+
+| Mode | Requests/Min | Burst Size | Use Case |
+|------|--------------|------------|----------|
+| **free** | 20 | 5 | Conservative limits for free tier |
+| **paid** | 1000 | 50 | Aggressive limits for paid tier (DEFAULT) |
+
+### Implementation
+
+```python
+class RateLimiter:
+    # Class-level (global) tracking across all instances
+    _global_lock = threading.Lock()
+    _global_request_times: deque = deque()
+    _global_enabled = True
+    _global_mode = "paid"  # DEFAULT: paid
+    
+    def wait_if_needed(self) -> float:
+        """Wait if necessary to respect rate limits."""
+        with RateLimiter._global_lock:
+            now = time.time()
+            
+            # Remove requests older than 60 seconds (sliding window)
+            while self._global_request_times and now - self._global_request_times[0] > 60.0:
+                self._global_request_times.popleft()
+            
+            # Check if we're at the rate limit
+            if len(self._global_request_times) >= self.max_requests_per_minute:
+                oldest_request = self._global_request_times[0]
+                wait_time = 60.0 - (now - oldest_request) + 0.1
+                if wait_time > 0:
+                    time.sleep(wait_time)
+            
+            # Record this request
+            self._global_request_times.append(now)
+```
+
+### Global Controls
+
+```python
+RateLimiter.disable_globally()  # Disable for testing
+RateLimiter.enable_globally()   # Re-enable
+RateLimiter.set_mode("free")    # Switch to conservative limits
+RateLimiter.reset()             # Reset tracking
+```
+
+## OpenRouter Client
+
+Custom HTTP client for OpenRouter API (replaces OpenAI client).
+
+From `llm.py:152-200`:
+
+```python
+class OpenRouterClient:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://openrouter.ai/api/v1",
+        max_requests_per_minute: int = 1000,
+        burst_size: int = 50,
+        mode: str = "paid",
+    ):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        
+        # Explicit timeout configuration
+        self.client = httpx.Client(
+            timeout=httpx.Timeout(
+                connect=10.0,  # Connection establishment
+                read=120.0,    # Slow LLM responses (increased from 60s)
+                write=30.0,    # Request body upload
+                pool=10.0      # Getting a connection from pool
+            )
+        )
+        
+        # Initialize rate limiter
+        self.rate_limiter = RateLimiter(
+            max_requests_per_minute=max_requests_per_minute,
+            burst_size=burst_size,
+            mode=mode
+        )
+    
+    def create(self, **kwargs):
+        """Make a chat completion request with rate limiting"""
+        # Apply rate limiting before making request
+        self.rate_limiter.wait_if_needed()
+        
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/your-repo",
+            "X-Title": "Timepoint-Pro",
+        }
+        
+        response = self.client.post(url, json=kwargs, headers=headers)
+        response.raise_for_status()
+        return response.json()
+```
+
+### Timeout Configuration
+
+- **connect**: 10s for connection establishment
+- **read**: 120s for slow LLM responses (increased from 60s)
+- **write**: 30s for request body upload
+- **pool**: 10s for getting a connection from the pool
+
+Prevents hangs on slow or unresponsive models.
+
+## Performance Characteristics
+
+### Model Selection Speed
+
+Model selection is **O(M)** where M = number of models in registry (typically ~12).
+
+Typical selection time: **under 1ms**
+
+### Cost Optimization
+
+Compared to using Llama 405B for everything:
+
+| Action Type | Typical Model | Cost Ratio |
+|-------------|---------------|------------|
+| Dialog synthesis | Llama 70B | **6x cheaper** |
+| Knowledge extraction | Qwen 72B | **6x cheaper** |
+| Mathematical reasoning | DeepSeek R1 | **8x cheaper** |
+| JSON generation | Qwen 7B | **50x cheaper** |
+| High-stakes evaluation | Llama 405B | 1x (baseline) |
+
+**Overall simulation cost reduction**: **5-10x** compared to single-model approach.
+
+### Fallback Reliability
+
+With 3-model fallback chains:
+- Single model failure rate: ~2-5%
+- Chain failure rate: **under 0.1%**
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Overview" icon="book" href="/mechanisms/overview">
+    Back to mechanisms overview
+  </Card>
+  <Card title="Fidelity Management" icon="layer-group" href="/mechanisms/fidelity-management">
+    How fidelity follows attention
+  </Card>
+</CardGroup>

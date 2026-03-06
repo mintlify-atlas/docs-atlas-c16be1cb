@@ -1,0 +1,494 @@
+---
+title: "Entity Simulation"
+description: "M9, M10, M11, M13, M15, M16 - Generate and synthesize entity behavior"
+---
+
+## The Core Challenge
+
+Generating and synthesizing entity behavior at the **appropriate fidelity level**, from on-demand creation to detailed dialog with differentiated voices.
+
+**Key principle**: Entities range from background elements (TENSOR_ONLY) to fully realized characters (TRAINED) based on narrative importance and query patterns.
+
+## M9: On-Demand Entity Generation
+
+Queries may reference entities that **don't exist yet**. The system detects this and generates plausible entities on demand.
+
+### Detection
+
+```python
+def detect_entity_gap(query, existing_entities):
+    referenced = extract_entity_names(query)
+    missing = referenced - set(existing_entities)
+    return missing
+
+def generate_entity_on_demand(name, context):
+    # LLM generates plausible entity given scenario context
+    # Falls back to minimal entity creation on failure
+```
+
+Pattern matching handles numbered entities: "attendee_47", "person_12" that emerge from queries about crowds or background characters.
+
+### Castaway Colony Example
+
+**Query**: "What did the crew find in cargo bay 3?"
+
+**Action**: Generate inventory entities on demand:
+- Supply crates with plausible damage states
+- Utility values
+- Contents consistent with research vessel
+
+**Query**: "Any other survivors from the lower deck?"
+
+**Action**: Generate background crew members:
+- Injury states
+- Knowledge profiles
+- Skill sets consistent with research vessel crew
+
+These entities **didn't exist until the query created them**, but they're causally consistent with the established scenario.
+
+## M10: Scene-Level Entity Sets
+
+Scenes have their own entity types that influence individual behavior.
+
+### Three Scene Entity Types
+
+#### 1. EnvironmentEntity
+
+Physical space properties.
+
+```python
+class EnvironmentEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    location: str
+    capacity: int
+    ambient_temperature: float
+    lighting_level: float  # 0.0-1.0 (dark to bright)
+    weather: str | None = None
+    architectural_style: str | None = None
+    acoustic_properties: str | None = None  # "reverberant", "muffled", etc.
+```
+
+**From `schemas.py:200-212`**
+
+#### 2. AtmosphereEntity
+
+Aggregated emotional and social atmosphere.
+
+```python
+class AtmosphereEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    tension_level: float  # 0.0-1.0 (calm to tense)
+    formality_level: float  # 0.0-1.0 (casual to formal)
+    emotional_valence: float  # -1.0 to 1.0 (negative to positive)
+    emotional_arousal: float  # 0.0-1.0 (calm to excited)
+    social_cohesion: float  # 0.0-1.0 (divided to united)
+    energy_level: float  # 0.0-1.0 (lethargic to energetic)
+```
+
+**From `schemas.py:215-225`**
+
+#### 3. CrowdEntity
+
+Collective behavior and composition.
+
+```python
+class CrowdEntity(SQLModel, table=True):
+    scene_id: str = Field(primary_key=True)
+    timepoint_id: str = Field(foreign_key="timepoint.timepoint_id")
+    size: int  # Number of people present
+    density: float  # 0.0-1.0 (sparse to crowded)
+    mood_distribution: str = Field(sa_column=Column(JSON))  # Dict[str, float]: mood -> percentage
+    movement_pattern: str  # "static", "flowing", "agitated", "orderly"
+    demographic_composition: str | None = Field(default=None)
+    noise_level: float  # 0.0-1.0 (quiet to loud)
+```
+
+**From `schemas.py:227-240`**
+
+### Context Shapes Behavior
+
+Individual entity behavior is synthesized **in context of scene-level state**:
+
+- A heated argument affects the **atmosphere**
+- Which affects how **other entities** behave
+- In a **specific environment**
+
+## M11: Dialog Synthesis
+
+Dialog generation uses **per-character turn generation**: each character produces dialog turns via independent LLM calls with persona-derived generation parameters, coordinated by a LangGraph steering agent.
+
+### Architecture: Three LangGraph Nodes
+
+```
+steering → character → quality_gate → conditional
+                                       ├→ steering (continue)
+                                       ├→ END (complete)
+                                       └→ character (retry)
+```
+
+#### 1. Steering Node
+
+Selects next speaker, evaluates narrative progress, injects mood shifts.
+
+**Capabilities**:
+- Speaker selection using back-layer contexts and proception states
+- Mood shift injection
+- Speaker suppression
+- Dialog termination decisions
+
+#### 2. Character Node
+
+Generates **ONE dialog turn** for the selected speaker.
+
+**Uses**:
+- Character-specific `PersonaParams` (temperature, top_p, max_tokens)
+- `FourthWallContext` (two-layer context separation)
+- Entity state (emotional, physical, knowledge)
+
+#### 3. Quality Gate Node
+
+Two-stage evaluation:
+
+**Stage 1: Surface heuristics** (cheap pre-filter):
+- Banned openers
+- Round-robin speaker distribution
+- Turn length coefficient of variation
+- Consensus ratio
+- Length spread
+
+**Stage 2: Semantic evaluation** (frontier model, if surface passes):
+- Narrative advancement
+- Conflict specificity
+- Voice distinctiveness
+
+### Dialog Turn Structure
+
+```python
+class DialogTurn(BaseModel):
+    speaker: str  # entity_id of speaker
+    content: str  # what was said
+    timestamp: datetime
+    emotional_tone: str | None = None  # inferred emotional tone
+    knowledge_references: list[str] = []  # knowledge items referenced
+    confidence: float | None = 1.0  # confidence in generation
+    physical_state_influence: str | None = None  # how physical state affected speech
+```
+
+**From `schemas.py:338-348`**
+
+### Params2Persona: Entity State → LLM Parameters
+
+Each character's LLM call uses generation parameters derived from their current cognitive state.
+
+**From `synth/params2persona.py`**:
+
+| Parameter | Source | Effect |
+|-----------|--------|--------|
+| `temperature` | arousal × energy | High arousal → varied output (~1.1); low energy → constrained (~0.4) |
+| `top_p` | arousal | Agitated characters focus vocabulary (lower top_p) |
+| `max_tokens` | turn position × energy | Later turns + low energy → shorter responses |
+| `frequency_penalty` | behavior_vector[5] | Vocabulary richness index |
+| `presence_penalty` | behavior_vector[6] | Novelty seeking index |
+
+ADPRS phi scales all parameters: low phi (entity not cognitively active) constrains all values toward minimums.
+
+### Fourth Wall Context (Two-Layer Separation)
+
+Each character receives a structured two-layer context.
+
+**From `workflows/dialog_context.py`**:
+
+#### Back Layer (shapes voice, NOT expressed in dialog)
+- True emotional state
+- Withheld knowledge
+- Suppressed impulses
+- Anxiety level
+- ADPRS band/phi
+- Steering directives
+
+The LLM uses this to modulate **how** the character speaks.
+
+#### Front Layer (character's actual knowledge)
+- Knowledge items (filtered by resolution level and causal ancestry)
+- Natural-language relationship descriptions
+- Presented emotional state
+- Physical state
+- Scene context
+
+Dialog content is drawn from here.
+
+### Knowledge Limits by Resolution
+
+| Resolution | Knowledge Items |
+|------------|----------------|
+| TENSOR_ONLY | 5 items |
+| SCENE | 8 items |
+| GRAPH | 12 items |
+| DIALOG | 16 items |
+| TRAINED | 20 items |
+
+### PORTAL Knowledge Stripping
+
+In PORTAL mode, characters only know things from timepoints **causally upstream** of their current position.
+
+```python
+def filter_knowledge_by_causal_time():
+    # Walk Timepoint.causal_parent chain
+    ancestor_timepoint_ids = build_ancestor_set(current_timepoint)
+    
+    # Strip any knowledge from causally inaccessible timepoints
+    filtered_knowledge = [
+        item for item in knowledge_items
+        if item.timepoint_id in ancestor_timepoint_ids
+    ]
+    
+    return filtered_knowledge
+
+def strip_backwards_emotions():
+    # Remove items referencing future events emotionally
+    # Characters can't fear events that haven't happened in their timeline
+```
+
+In non-PORTAL modes, these filters are no-ops.
+
+### Voice Differentiation Pipeline
+
+**4-stage transformation**:
+
+```
+1. entity_metadata → personality_traits
+   ["analytical", "reserved", "pragmatic"]
+
+2. personality_traits → speaking_style
+   {verbosity: "terse", formality: "formal", tone: "neutral", 
+    vocabulary: "technical", speech_pattern: "direct"}
+
+3. speaking_style × emotional_state → dialog_params
+   {turn_length: 80, interruption_freq: 0.1, focus: "task"}
+
+4. All → PersonaParams → per-character LLM call
+   {temperature: 0.7, top_p: 0.9, max_tokens: 150, ...}
+```
+
+### Entity Type Filtering (Animism-Aware)
+
+Non-human entities (animals, buildings, environments, abstracts) are filtered from dialog participation based on the template's `animism_level` setting.
+
+**Entities that pass the threshold** receive per-type speaking modes:
+
+| Entity Type | Speaking Mode |
+|-------------|---------------|
+| **Animals** | Behavioral narration (third-person actions, no human grammar) |
+| **Buildings/environments** | Environmental narration (sensory descriptions felt by occupants) |
+| **Abstracts** | Collective consciousness (emergent sentiment, atmospheric shift) |
+
+See M16 for full animism architecture.
+
+### Tensor Synchronization
+
+Before dialog synthesis: **TTMTensor → CognitiveTensor sync** ensures trained emotional values are used.
+
+After dialog:
+
+1. **Emotional Impact Analysis**: Dialog content analyzed for emotional keywords
+2. **State Persistence**: Updated emotional states written to `entity_metadata["cognitive_tensor"]`
+3. **Backprop to Tensor**: Changes synced back to TTMTensor context_vector
+
+This enables **emotional evolution** across dialogs—entities accumulate emotional state changes throughout the simulation.
+
+### Temporal Freshness (Beat Avoidance)
+
+Dialog synthesis accepts `prior_dialog_beats`—a rolling list of speaker+content summaries from previous dialogs in the same run.
+
+These beats are listed in the prompt with explicit **"Do NOT repeat"** instruction, forcing the LLM to advance the narrative rather than recycling the same beats across every timepoint.
+
+Cross-dialog semantic evaluation reinforces this.
+
+### Dialog Data Structure
+
+```python
+class DialogData(BaseModel):
+    turns: list[DialogTurn]
+    total_duration: int | None = None  # estimated duration in seconds
+    information_exchanged: list[str] = []  # knowledge items passed between entities
+    relationship_impacts: dict[str, float] = {}  # entity_pair -> delta
+    atmosphere_evolution: list[dict[str, float]] = []  # atmosphere changes over time
+```
+
+**From `schemas.py:362-369`**
+
+## M13: Multi-Entity Synthesis
+
+Relationships evolve and can be analyzed across entities.
+
+### Relationship Metrics
+
+```python
+class RelationshipMetrics:
+    shared_knowledge: Set[str]
+    belief_alignment: float
+    interaction_count: int
+    trust_level: float
+    power_dynamic: float
+
+def analyze_relationship_evolution(entity_a, entity_b, timespan):
+    # Track how relationship metrics change over timepoints
+    
+def detect_contradictions(entities, timepoint):
+    # Find belief conflicts between entities
+```
+
+### Belief Alignment Tracking
+
+As entities interact across timepoints:
+- **Shared knowledge** grows or diverges
+- **Trust levels** evolve based on consistency
+- **Power dynamics** shift based on decisions and outcomes
+
+## M15: Entity Prospection (Extended Inner Life)
+
+Entities model their own futures, and those models influence present behavior.
+
+### Prospective State
+
+```python
+class ProspectiveState:
+    entity_id: str
+    forecast_horizon: timedelta
+    expectations: List[Expectation]
+    contingency_plans: Dict[str, List[Action]]
+    anxiety_level: float
+    # Extended proception (post-dialog)
+    withheld_knowledge: List[Dict]       # What they chose not to say
+    suppressed_impulses: List[Dict]      # What they wanted to do but held back
+    episodic_memory: List[Dict]          # Personality-filtered dialog memories
+    rumination_topics: List[Dict]        # Recurring concerns (decay/intensify)
+```
+
+A founder considering a pivot doesn't just react to current state—they **simulate consequences** (imperfectly, with bias) and act on those simulations.
+
+This captures:
+- Planning
+- Anxiety
+- Anticipatory behavior
+
+### Post-Dialog Proception
+
+After every dialog, `trigger_post_dialog_proception()` updates each participant's inner life:
+
+#### 1. Episodic Memory
+
+`generate_episodic_memory`: LLM generates **personality-filtered memories** of the conversation. Each entity remembers differently based on what was personally relevant.
+
+#### 2. Rumination
+
+`update_rumination_topics`: Recurring concerns tracked across dialogs.
+
+- Topics addressed in dialog **lose intensity**
+- Unresolved topics **intensify**
+- New concerns identified from dialog content
+
+#### 3. Withheld Knowledge
+
+What the character knew but **chose not to say** (from steering agent decisions). Persists across dialogs and feeds back into the Fourth Wall back layer.
+
+#### 4. Suppressed Impulses
+
+What the character wanted to do but **held back** (from steering agent and social norms). Feeds into future dialog tension.
+
+#### 5. Knowledge Generation
+
+`generate_knowledge_from_proception`: Expectations and high-intensity rumination topics generate **M3 exposure events**, making inner life accessible in future dialogs.
+
+## M16: Animistic Entity Extension
+
+Objects, institutions, and places can have **agency**.
+
+### Animism Levels
+
+```python
+class AnimismLevel:
+    0: Only humans
+    1: Humans + animals/buildings
+    2: All objects/organisms  
+    3: Abstract concepts
+    4: Adaptive (AnyEntity)
+    5: Spiritual (KamiEntity)
+    6: AI agents
+```
+
+The conference room "wants" productive meetings; the startup's codebase "resists" certain changes.
+
+This captures how non-human entities **shape behavior** without requiring explicit rules—the animistic frame lets the LLM reason about object/institution agency naturally.
+
+### Dialog Enforcement
+
+M16 connects to M11 (Dialog Synthesis) through `_filter_dialog_participants()`.
+
+**Entity type → minimum animism_level threshold**:
+
+| Entity Type | Threshold | Speaking Mode |
+|-------------|-----------|---------------|
+| human, person, character | 0 | Normal dialog |
+| animal, creature | 1 | Behavioral narration (third-person actions) |
+| building, object, environment, location, vehicle | 2 | Environmental narration (sensory descriptions) |
+| abstract, concept, force | 3 | Collective consciousness (emergent sentiment) |
+
+At `animism_level=0` (default), **only humans** participate in dialog. Higher levels include non-human entities with appropriate speaking modes injected into the prompt.
+
+This prevents non-human entities from speaking as humans while still allowing their presence in the narrative.
+
+### Implementation
+
+From template configuration:
+
+```json
+{
+  "animism_level": 2,
+  "entity_roster": [
+    {"entity_id": "commander_tanaka", "entity_type": "human"},
+    {"entity_id": "meridian_ship", "entity_type": "vehicle"},
+    {"entity_id": "alien_biosphere", "entity_type": "environment"}
+  ]
+}
+```
+
+With `animism_level=2`:
+- **Commander Tanaka**: Normal dialog
+- **Meridian Ship**: Environmental narration ("The ship groans under stress...")
+- **Alien Biosphere**: Environmental narration ("The flora responds with bioluminescence...")
+
+## Performance Characteristics
+
+### Dialog Generation Cost
+
+Per-character turn generation:
+- **Input**: ~1,000 tokens (persona params + fourth wall context + history)
+- **Output**: ~200 tokens per turn
+- **Models**: Llama 70B, Qwen 72B, DeepSeek Chat
+- **Cost per dialog**: ~$0.02 (5-10 turns)
+
+Compared to single-call generation: **More expensive but higher quality**.
+
+### Scene Entity Storage
+
+SQLite with scene_id indexes:
+- **EnvironmentEntity**: ~200 bytes per scene
+- **AtmosphereEntity**: ~150 bytes per scene
+- **CrowdEntity**: ~300 bytes per scene
+- **Total**: ~650 bytes per scene
+
+Typical simulation (20 scenes): ~13KB
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Infrastructure" icon="server" href="/mechanisms/infrastructure">
+    M18 model selection and routing
+  </Card>
+  <Card title="Overview" icon="book" href="/mechanisms/overview">
+    Back to mechanisms overview
+  </Card>
+</CardGroup>

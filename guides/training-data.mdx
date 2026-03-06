@@ -1,0 +1,483 @@
+---
+title: 'Training Data'
+description: 'Export simulation data for fine-tuning models: TDF and JSONL formats, licensing considerations'
+---
+
+## Overview
+
+Timepoint Pro generates **high-quality training data** for fine-tuning language models. Unlike naive prompt/completion pairs, SNAG-generated data includes:
+
+- **Full causal ancestry** - Every knowledge item has provenance
+- **Quantitative state tensors** - Emotional valence, arousal, energy at each turn
+- **Temporal consistency** - Portal mode strips anachronistic knowledge
+- **Counterfactual reasoning** - Branching mode shows "what if" alternatives
+- **Rich context** - M3 knowledge provenance, M6 entity state, M7 causal history, M10 atmosphere, M11 dialog context, M13 relationships
+
+This makes SNAG data uniquely valuable for training:
+- **Causal reasoning models**
+- **Multi-agent roleplay models**
+- **Temporal reasoning systems**
+- **Social simulation models**
+
+## Export Formats
+
+### TDF (Timepoint Data Format)
+
+TDF is the canonical interchange format for the Timepoint Suite (Flash, Pro, Clockchain, SNAG-Bench, Proteus).
+
+**Export via API:**
+```python
+GET /api/data-export/{run_id}
+```
+
+**Returns:**
+```json
+{
+  "run_id": "run_abc123",
+  "entities": [...],
+  "dialogs": [...],
+  "causal_edges": [...],
+  "metadata": {
+    "mechanisms": ["M3", "M7", "M11", "M13"],
+    "temporal_mode": "portal",
+    "cost_usd": 0.42,
+    "token_count": 12847
+  }
+}
+```
+
+**TDF package integration:**
+
+Timepoint Pro uses the canonical `timepoint-tdf` package:
+
+```python
+from timepoint_tdf import from_pro, write_tdf_jsonl
+
+# Convert Pro run to TDF
+tdf_data = from_pro(run_id, store)
+
+# Write to JSONL
+write_tdf_jsonl(tdf_data, "output.jsonl")
+```
+
+**TDF schema:**
+
+```python
+{
+  "@context": "https://timepoint.ai/tdf/v1",
+  "@type": "RenderedFuture",
+  "run_id": "run_abc123",
+  "scenario": "mars_mission_portal",
+  "temporal_mode": "portal",
+  "entities": [
+    {
+      "entity_id": "Webb",
+      "entity_type": "human",
+      "tensor": {...},
+      "metadata": {...}
+    }
+  ],
+  "timepoints": [
+    {
+      "timepoint_id": "T1",
+      "timestamp": "2026-03-01T14:00:00Z",
+      "entities_present": ["Webb", "Chen"],
+      "causal_antecedents": ["T0"]
+    }
+  ],
+  "dialogs": [...],
+  "causal_graph": {
+    "nodes": [...],
+    "edges": [...]
+  },
+  "provenance": {
+    "generated_at": "2026-03-06T12:00:00Z",
+    "model": "meta-llama/llama-3.1-70b-instruct",
+    "cost_usd": 0.42
+  }
+}
+```
+
+### JSONL (Training Format)
+
+Prompt/completion pairs for fine-tuning:
+
+**Enable in template:**
+```json
+"outputs": {
+  "export_ml_dataset": true
+}
+```
+
+**Example JSONL record:**
+```json
+{
+  "prompt": "[INST] You are Webb, mission commander. Current state: emotional_valence=-0.2, emotional_arousal=0.6, energy_budget=72. You know: ['Mission timeline', 'O2 scrubber threshold 800 ppm', 'Current reading 847 ppm']. Relationships: Chen (colleague, trusted). Recent: Sensor alert 2 hours ago. Generate your next dialog turn. [/INST]",
+  "completion": "The reading's at 847. That's 6% over spec. Chen, run a calibration check. If it's still high in 30 minutes, we scrub the EVA.",
+  "metadata": {
+    "timepoint_id": "T2",
+    "speaker": "Webb",
+    "archetype": "military_commander",
+    "mechanism": "M11",
+    "emotional_valence": -0.2,
+    "emotional_arousal": 0.6,
+    "training_safe": true
+  }
+}
+```
+
+**Sample file:**
+
+See `examples/sample_training_data.jsonl` for complete examples from Portal mode simulations.
+
+### SQLite Export
+
+Full simulation state in relational format:
+
+```bash
+# Simulation runs stored in metadata/runs.db
+sqlite3 metadata/runs.db
+
+sqlite> SELECT run_id, status, cost_usd, created_at FROM runs;
+```
+
+**Tables:**
+- `runs` - Run metadata
+- `entities` - Entity tensors and metadata
+- `timepoints` - Temporal structure
+- `dialogs` - Conversation turns
+- `causal_edges` - Causal graph structure
+- `exposure_events` - Knowledge propagation (M3)
+
+### Oxen.ai Auto-Upload
+
+Automatic versioned dataset upload:
+
+```bash
+export OXEN_API_KEY=your_key
+./run.sh run mars_mission_portal
+# Automatically uploads to Oxen.ai with run metadata
+```
+
+**Upload triggers:**
+- `export_ml_dataset=true` in template
+- `OXEN_API_KEY` environment variable set
+- Run completes successfully
+
+**Oxen dataset structure:**
+```
+timepoint-pro-training-data/
+├── runs/
+│   ├── run_abc123/
+│   │   ├── training_data.jsonl
+│   │   ├── tdf_export.json
+│   │   └── metadata.json
+```
+
+## Model Licensing
+
+**CRITICAL:** Not all open-source models allow unrestricted use of outputs for training data.
+
+### License Matrix
+
+| License | Models | Training Data Status |
+|---------|--------|---------------------|
+| **MIT** | DeepSeek Chat, DeepSeek R1 | ✅ Fully unrestricted—outputs can train any model |
+| **Apache 2.0** | Mistral 7B, Mixtral 8x7B, Mixtral 8x22B | ✅ Fully unrestricted—outputs can train any model |
+| **Llama** | Llama 3.1 8B/70B/405B, Llama 4 Scout | ⚠️ **Restricted**—Meta's license prohibits using Llama outputs to train non-Llama models |
+| **Qwen** | Qwen 2.5 7B/72B, QwQ 32B | ✅ Permissive for most uses |
+
+### Default Behavior: M18 Filtering
+
+The model selector (**M18**) automatically filters to training-safe models:
+
+```python
+from llm_service.model_selector import ModelSelector, ActionType
+
+selector = ModelSelector()
+
+# Automatically filters to MIT/Apache-2.0 models
+model = selector.select_model(
+    ActionType.DIALOG_SYNTHESIS,
+    for_training_data=True  # Only unrestricted licenses
+)
+# Returns: "deepseek/deepseek-chat" or "mistralai/mixtral-8x7b-instruct"
+```
+
+**When `for_training_data=True`:**
+- Llama models excluded (license restricts training non-Llama models)
+- Only MIT and Apache-2.0 licensed models used
+- Oxen.ai upload uses this filter automatically
+
+### Check Training-Safe Models
+
+```python
+selector = ModelSelector()
+training_safe = selector.get_training_safe_models()
+
+print(training_safe)
+# ['deepseek/deepseek-chat', 'deepseek/deepseek-r1', 
+#  'mistralai/mixtral-8x7b-instruct', 'mistralai/mixtral-8x22b-instruct']
+```
+
+### Explicitly Use Training-Safe Models
+
+**In CLI:**
+```bash
+# Force training-safe model
+./run.sh run --model deepseek/deepseek-r1 mars_mission_portal
+```
+
+**In template:**
+```json
+{
+  "temporal": {
+    "mode": "forward"
+  },
+  "llm_config": {
+    "default_model": "deepseek/deepseek-chat",
+    "for_training_data": true
+  }
+}
+```
+
+### License Implications
+
+**If using Llama outputs:**
+- ✅ Can fine-tune **Llama models** (same family)
+- ❌ Cannot fine-tune Qwen, Mistral, DeepSeek, or custom models
+- ❌ Cannot upload to public datasets (e.g., Hugging Face)
+
+**If using MIT/Apache-2.0 outputs:**
+- ✅ Can fine-tune **any model**
+- ✅ Can upload to public datasets
+- ✅ Can use commercially without restrictions
+
+**Recommendation:**
+
+If you plan to fine-tune **non-Llama models** or create **public datasets**, always use:
+```bash
+./run.sh run --model deepseek/deepseek-r1 your_template
+```
+
+## Training Data Quality
+
+### Why SNAG Data is Superior
+
+**Standard training data:**
+```json
+{
+  "prompt": "You are a commander. Generate a dialog turn.",
+  "completion": "We need to check the systems."
+}
+```
+
+**SNAG training data:**
+```json
+{
+  "prompt": "[INST] You are Webb (military_commander archetype). State: emotional_valence=-0.2, arousal=0.6, energy=72. Knowledge provenance: 'O2 reading 847 ppm' (learned from Chen at T1, confidence 0.9), 'Threshold 800 ppm' (mission briefing T0). Relationships: Chen +0.3 trust. Causal history: Sensor alert → Disagreement with Chen → Current timepoint. Portal mode: T3 of 5, working backward from mission failure. Context: Late afternoon (circadian penalty 1.0), confined space (atmosphere: tension 0.7). Character arc: 2 prior data_arguments dismissed by crew. Generate your next dialog turn responding to Chen's concern about the O2 reading. [/INST]",
+  "completion": "The reading's at 847. That's 6% over spec. Chen, run a calibration check. If it's still high in 30 minutes, we scrub the EVA.",
+  "metadata": {
+    "mechanisms": ["M3", "M6", "M7", "M8", "M10", "M11", "M13"],
+    "temporal_mode": "portal",
+    "archetype": "military_commander",
+    "training_safe": true
+  }
+}
+```
+
+The SNAG version includes:
+- ✅ Quantitative emotional state
+- ✅ Knowledge provenance (who told them, when, confidence)
+- ✅ Causal history leading to this moment
+- ✅ Relationship dynamics
+- ✅ Character arc (past failures influencing tactics)
+- ✅ Circadian and atmospheric context
+- ✅ Temporal mode constraints (Portal backward reasoning)
+
+This trains models on **how social state influences language**, not just language patterns.
+
+### Data Diversity
+
+Generate diverse training sets using:
+
+**Branching mode:**
+```json
+"temporal": {
+  "mode": "branching",
+  "enable_counterfactuals": true,
+  "path_count": 5
+}
+```
+
+Produces 5 timeline variants from the same initial conditions → diverse outputs.
+
+**Variations:**
+```json
+"variations": {
+  "enabled": true,
+  "count": 10,
+  "strategies": ["vary_personalities", "vary_outcomes"],
+  "deduplication_threshold": 0.9
+}
+```
+
+Runs the same scenario 10 times with varied entity personalities → diverse character voices.
+
+## Use Cases
+
+### Fine-Tuning Causal Reasoning Models
+
+Portal mode data trains models to reason backward from outcomes:
+
+```bash
+./run.sh run --mode portal mars_mission_portal
+```
+
+**Training objective:**
+```
+Given outcome: "Mission fails due to life support failure"
+Generate: Plausible causal chain of antecedent states
+```
+
+### Fine-Tuning Roleplay Models
+
+Dialog with archetype profiles trains character consistency:
+
+```bash
+./run.sh run board_meeting
+```
+
+**Training objective:**
+```
+Given personality traits + archetype + emotional state:
+Generate: Contextually appropriate dialog in character voice
+```
+
+### Fine-Tuning Multi-Agent Models
+
+Branching mode trains models to predict divergent outcomes:
+
+```bash
+./run.sh run castaway_colony_branching
+```
+
+**Training objective:**
+```
+Given initial state + intervention:
+Generate: Divergent timeline showing causal consequences
+```
+
+### Diffusion Model Conditioning
+
+Future use case: Train diffusion models conditioned on temporal causal graphs:
+
+```python
+# Hypothetical future API
+model.train(
+    condition=causal_graph,
+    target=entity_states,
+    objective="predict_future_state"
+)
+```
+
+## Best Practices
+
+### Balance Quality and Quantity
+
+**High-quality (expensive):**
+```bash
+./run.sh run --model meta-llama/llama-3.1-405b-instruct mars_mission_portal
+# Cost: ~$2.00 per run
+# Quality: Excellent causal reasoning
+```
+
+**Medium-quality (balanced):**
+```bash
+./run.sh run --model meta-llama/llama-3.1-70b-instruct mars_mission_portal
+# Cost: ~$0.40 per run
+# Quality: Good for most use cases
+```
+
+**High-volume (cheap):**
+```bash
+./run.sh run --model deepseek/deepseek-chat convergence/simple
+# Cost: ~$0.02 per run
+# Quality: Acceptable for bulk data
+```
+
+### Filter by Mechanism
+
+Generate data targeting specific capabilities:
+
+```python
+# Causal reasoning: M3 + M7
+templates = ["mars_mission_portal", "agent3_litigation_portal"]
+
+# Multi-agent negotiation: M11 + M13
+templates = ["board_meeting", "vc_pitch_branching"]
+
+# Embodied cognition: M8 + M14
+templates = ["hospital_crisis"]
+
+# Counterfactual reasoning: M12
+templates = ["castaway_colony_branching", "agent2_mission_failure"]
+```
+
+### Validate Data Quality
+
+Run convergence tests to verify data stability:
+
+```bash
+./run.sh run convergence/simple --repeat 5
+# Check Jaccard similarity > 0.7 across runs
+```
+
+High convergence = reliable training data.
+
+### Version Control with Oxen
+
+Use Oxen.ai to track dataset lineage:
+
+```bash
+export OXEN_API_KEY=your_key
+
+# Each run automatically tagged with:
+# - Template name
+# - Temporal mode
+# - Mechanism set
+# - Model used
+# - Cost and token count
+```
+
+Query historical runs:
+```bash
+oxen log --filter "temporal_mode=portal" --filter "cost_usd<0.50"
+```
+
+## Data Privacy
+
+**Local-only by default:**
+- All data stays in `metadata/runs.db`
+- No external services called unless explicitly configured
+
+**Cloud upload (opt-in):**
+- Requires `OXEN_API_KEY` set
+- Only uploads when `export_ml_dataset=true`
+
+**Sensitive scenarios:**
+
+For proprietary or sensitive scenarios:
+```json
+"outputs": {
+  "export_ml_dataset": false  // Disable dataset export
+}
+```
+
+Data remains local in SQLite.
+
+## Next Steps
+
+- Learn about [Cost Optimization](/guides/cost-optimization) to balance training data quality and cost
+- Read [Validation](/guides/validation) to understand data quality checks
+- Explore [Templates](/guides/templates) to configure training data export settings

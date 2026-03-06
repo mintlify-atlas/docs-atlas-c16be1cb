@@ -1,0 +1,535 @@
+---
+title: 'Cost Optimization'
+description: 'Fidelity strategies, model selection (M18), and batch operations for cost-effective simulations'
+---
+
+## Overview
+
+Timepoint Pro uses **variable-depth fidelity** to minimize cost while preserving simulation quality. The core insight: most entities most of the time can stay at low resolution (~200 tokens). Detail expands only where queries land.
+
+This is the **physics-style abstraction** that makes SNAG scalable:
+- Coarse resolution for broad arcs
+- High resolution at critical pivots
+- Query-driven detail expansion
+
+Typical savings: **95%+ token reduction** vs. maintaining full context for all entities.
+
+## Fidelity Levels
+
+### TENSOR_ONLY (~200 tokens)
+
+```python
+{
+  "entity_id": "Webb",
+  "tensor": {
+    "context_vector": [0.5, -0.2, 0.6, 0.72, 0.8, 0.5, 0.3, 0.7],
+    "behavior_vector": [0.7, 0.3, 0.2, 0.8, 0.5],
+    "biology_vector": [35, 0.0, 0.0, 0.85]
+  }
+}
+```
+
+**Tokens:** ~200  
+**Use case:** Background entities, crowd members, entities not involved in current scene  
+**Mechanisms:** M6 (Tensor Compression)
+
+### BASIC_PROFILE (~800 tokens)
+
+```python
+{
+  "entity_id": "Webb",
+  "role": "Mission Commander",
+  "personality_traits": ["authoritative", "risk-averse", "decisive"],
+  "knowledge_state": ["Mission timeline", "Crew roles", "Current status"],
+  "relationships": {
+    "Chen": {"type": "colleague", "trust": 0.3}
+  },
+  "tensor": {...}
+}
+```
+
+**Tokens:** ~800  
+**Use case:** Active participants in scene, dialog speakers  
+**Mechanisms:** M1 (Heterogeneous Fidelity), M6 (Tensor Compression)
+
+### FULL_CONTEXT (~2000+ tokens)
+
+```python
+{
+  "entity_id": "Webb",
+  "role": "Mission Commander. 15 years NASA experience. Led 2 prior ISS missions.",
+  "personality_traits": ["authoritative", "risk-averse", "decisive", "pragmatic"],
+  "archetype_id": "military_commander",
+  "knowledge_state": [
+    {"content": "O2 reading 847 ppm", "source": "Chen", "confidence": 0.9, "learned_at": "T1"},
+    {"content": "Threshold 800 ppm", "source": "mission_briefing", "confidence": 1.0}
+  ],
+  "proception_state": {
+    "episodic_memories": [...],
+    "rumination_topics": [...],
+    "withheld_knowledge": [...],
+    "suppressed_impulses": [...]
+  },
+  "character_arc": {
+    "dialog_attempts": [...],
+    "trust_ledger": {...},
+    "unspoken_accumulation": [...]
+  },
+  "tensor": {...}
+}
+```
+
+**Tokens:** ~2000-5000  
+**Use case:** Protagonist, key decision makers, entities with complex internal state  
+**Mechanisms:** M1 (Heterogeneous Fidelity), M2 (Progressive Training), M6 (Tensor Compression), M15 (Prospection)
+
+## Fidelity Templates
+
+Pre-configured fidelity strategies:
+
+### minimal
+
+```json
+{
+  "fidelity_template": "minimal",
+  "token_budget": 20000,
+  "token_budget_mode": "hard"
+}
+```
+
+**Strategy:**
+- All entities start at TENSOR_ONLY
+- No automatic upgrades
+- Dialog synthesis disabled
+- Minimal knowledge tracking
+
+**Cost:** ~$0.02-0.05 per run  
+**Use case:** Rapid prototyping, convergence testing, bulk data generation
+
+### balanced
+
+```json
+{
+  "fidelity_template": "balanced",
+  "token_budget": 80000,
+  "token_budget_mode": "soft"
+}
+```
+
+**Strategy:**
+- Entities start at TENSOR_ONLY
+- Dialog participants upgraded to BASIC_PROFILE
+- Key decision makers upgraded to FULL_CONTEXT
+- Automatic downgrade after scene
+
+**Cost:** ~$0.10-0.40 per run  
+**Use case:** Default for most scenarios (95% of templates use this)
+
+### high_detail
+
+```json
+{
+  "fidelity_template": "high_detail",
+  "token_budget": 200000,
+  "token_budget_mode": "soft"
+}
+```
+
+**Strategy:**
+- Key entities start at FULL_CONTEXT
+- All dialog participants maintained at BASIC_PROFILE minimum
+- Rich knowledge tracking (M3 Exposure Events)
+- Extended proception state (M15)
+
+**Cost:** ~$0.50-2.00 per run  
+**Use case:** Training data generation, showcase demos, research
+
+## Token Budget Modes
+
+### hard (Strict)
+
+```json
+{
+  "token_budget": 50000,
+  "token_budget_mode": "hard"
+}
+```
+
+**Behavior:**
+- Simulation aborts if budget exceeded
+- Forces entity downgrades before generation
+- Skips dialog if insufficient tokens
+
+**Use case:** Cost-critical applications, API billing limits
+
+### soft (Flexible)
+
+```json
+{
+  "token_budget": 80000,
+  "token_budget_mode": "soft"
+}
+```
+
+**Behavior:**
+- Budget is a target, not a hard limit
+- Allows overruns up to 20%
+- Logs warnings but continues
+
+**Use case:** Quality-first applications, research, demos
+
+### adaptive (Dynamic)
+
+```json
+{
+  "token_budget": 100000,
+  "token_budget_mode": "adaptive",
+  "fidelity_planning_mode": "hybrid"
+}
+```
+
+**Behavior:**
+- Dynamically adjusts fidelity based on scene importance
+- Upgrades entities at narrative pivots
+- Downgrades during transitions
+- Learns optimal fidelity allocation over run
+
+**Use case:** Long simulations (10+ timepoints), complex scenarios
+
+## Model Selection (M18)
+
+The model selector intelligently chooses models based on action type and requirements.
+
+### Action Types
+
+```python
+from llm_service.model_selector import ModelSelector, ActionType
+
+selector = ModelSelector()
+
+# Dialog synthesis: prioritize conversational ability
+model = selector.select_model(ActionType.DIALOG_SYNTHESIS)
+# Returns: "meta-llama/llama-3.1-70b-instruct"
+
+# Causal reasoning: prioritize logical reasoning
+model = selector.select_model(ActionType.TEMPORAL_REASONING)
+# Returns: "deepseek/deepseek-r1" (reasoning model)
+
+# Structured output: prioritize JSON reliability
+model = selector.select_model(ActionType.STRUCTURED_OUTPUT)
+# Returns: "mistralai/mixtral-8x7b-instruct"
+```
+
+### Selection Preferences
+
+**Quality-first:**
+```python
+model = selector.select_model(
+    ActionType.DIALOG_SYNTHESIS,
+    prefer_quality=True
+)
+# Returns: "meta-llama/llama-3.1-405b-instruct" (expensive but best)
+```
+
+**Speed-first:**
+```python
+model = selector.select_model(
+    ActionType.DIALOG_SYNTHESIS,
+    prefer_speed=True
+)
+# Returns: "meta-llama/llama-3.1-8b-instruct" (fast inference)
+```
+
+**Cost-first:**
+```python
+model = selector.select_model(
+    ActionType.DIALOG_SYNTHESIS,
+    prefer_cost=True
+)
+# Returns: "deepseek/deepseek-chat" (cheapest)
+```
+
+### Model Profiles
+
+```python
+profile = selector.get_model_profile("meta-llama/llama-3.1-70b-instruct")
+
+print(profile)
+# ModelProfile(
+#     model_id="meta-llama/llama-3.1-70b-instruct",
+#     context_tokens=128000,
+#     relative_cost=0.8,
+#     relative_speed=0.7,
+#     relative_quality=0.9,
+#     training_data_unrestricted=False,  # Llama license restricts training non-Llama models
+#     capabilities={DIALOG_GENERATION, CAUSAL_REASONING, LARGE_CONTEXT}
+# )
+```
+
+### Fallback Chains
+
+Automatic retry with model diversity:
+
+```python
+chain = selector.get_fallback_chain(
+    ActionType.DIALOG_SYNTHESIS,
+    chain_length=3
+)
+print(chain)
+# [
+#     "meta-llama/llama-3.1-70b-instruct",  # Quality-first
+#     "mistralai/mixtral-8x7b-instruct",    # Balanced fallback
+#     "deepseek/deepseek-chat"              # Cost-efficient final fallback
+# ]
+```
+
+Used automatically in LLM service:
+```python
+result = llm_service.generate(
+    prompt=prompt,
+    action=ActionType.DIALOG_SYNTHESIS,
+    retry_on_failure=True  # Uses fallback chain
+)
+```
+
+## Batch Operations
+
+### Run Multiple Templates
+
+Run all templates in a category:
+
+```bash
+./run.sh run --category showcase
+# Runs all 12 showcase templates
+```
+
+**Cost estimate:**
+```
+board_meeting:      $0.05
+jefferson_dinner:   $0.05
+hospital_crisis:    $0.05
+detective:          $0.05
+kami_shrine:        $0.05
+vc_pitch_forward:   $0.08
+vc_pitch_branching: $0.10
+vc_pitch_roadshow:  $0.20
+vc_pitch_strategies:$0.12
+hound_shadow:       $0.25
+mars_mission:       $0.40
+sec_investigation:  $0.08
+----------------------------
+Total:              ~$1.48
+```
+
+### Convergence Testing
+
+Repeat same template to measure stability:
+
+```bash
+./run.sh run convergence/simple --repeat 10
+```
+
+**Parallel execution:**
+```bash
+for i in {1..10}; do
+  ./run.sh run convergence/simple &
+done
+wait
+```
+
+**Cost:** $0.02 × 10 = **$0.20** for 10 runs
+
+### Variation Generation
+
+Generate diverse outputs from same scenario:
+
+```json
+"variations": {
+  "enabled": true,
+  "count": 10,
+  "strategies": ["vary_personalities", "vary_outcomes"],
+  "deduplication_threshold": 0.9
+}
+```
+
+**Cost:** Base cost × variation count × dedup factor  
+**Example:** $0.10 × 10 × 0.8 = **$0.80**
+
+## Cost Estimation
+
+Roughly:
+- **Input tokens:** $0.30-1.50 per 1M tokens (model dependent)
+- **Output tokens:** $1.00-5.00 per 1M tokens
+- **Average run:** 20,000-100,000 tokens total
+
+**Formula:**
+```python
+cost = (input_tokens / 1_000_000) * input_price + \
+       (output_tokens / 1_000_000) * output_price
+```
+
+**Example (Llama 3.1 70B):**
+```python
+input_tokens = 60000
+output_tokens = 15000
+
+cost = (60000 / 1_000_000) * 0.88 + \
+       (15000 / 1_000_000) * 0.88
+    = 0.0528 + 0.0132
+    = $0.066
+```
+
+## Best Practices
+
+### Start Cheap, Scale Up
+
+```bash
+# 1. Validate template structure
+./run.sh run --fidelity minimal board_meeting
+# Cost: ~$0.02
+
+# 2. Test with default fidelity
+./run.sh run board_meeting
+# Cost: ~$0.05
+
+# 3. Generate training data with high quality
+./run.sh run --fidelity high_detail board_meeting
+# Cost: ~$0.15
+```
+
+### Use Quick Tier for Iteration
+
+Develop using quick tier templates:
+
+```bash
+./run.sh quick  # Runs all quick tier templates
+# Total cost: ~$0.10 for 5 templates
+```
+
+Only move to comprehensive tier when ready.
+
+### Disable Unnecessary Features
+
+```json
+{
+  "outputs": {
+    "include_dialogs": false,              // Save ~40% tokens
+    "export_ml_dataset": false,            // Skip JSONL generation
+    "enhance_narrative_with_llm": false    // Skip LLM narrative polish
+  }
+}
+```
+
+### Optimize Timepoint Count
+
+```json
+{
+  "timepoints": {
+    "count": 3  // Start with minimum, increase as needed
+  }
+}
+```
+
+Each additional timepoint adds ~20-40% to cost.
+
+### Use Training-Safe Models for Data Generation
+
+DeepSeek is cheapest unrestricted model:
+
+```bash
+./run.sh run --model deepseek/deepseek-chat mars_mission_portal
+# Cost: ~$0.15 (vs $0.40 with Llama 70B)
+# Trade-off: Slightly lower quality, but 60% cheaper
+```
+
+## Cost Troubleshooting
+
+### Run Too Expensive
+
+**Check actual cost:**
+```bash
+sqlite3 metadata/runs.db
+sqlite> SELECT run_id, cost_usd, token_count FROM runs ORDER BY cost_usd DESC LIMIT 10;
+```
+
+**Reduce cost:**
+1. Set `fidelity_template: minimal`
+2. Decrease `timepoints.count`
+3. Decrease `entities.count`
+4. Set `token_budget_mode: hard` with lower budget
+5. Disable `include_dialogs`
+
+### Unexpected Token Usage
+
+**Debug token consumption:**
+```python
+from llm_service.model_selector import get_token_estimator
+
+estimator = get_token_estimator("meta-llama/llama-3.1-70b-instruct")
+tokens = estimator(prompt)
+print(f"Estimated tokens: {tokens}")
+```
+
+**Common culprits:**
+- Dialog with many turns (10+ turns = 5000+ tokens)
+- FULL_CONTEXT entities (2000+ tokens each)
+- Knowledge provenance tracking (M3 adds ~20% overhead)
+- Prospection state (M15 adds ~30% overhead)
+
+### Budget Exceeded Errors
+
+**Error:**
+```
+TokenBudgetExceededError: Run exceeded hard budget of 50000 tokens (actual: 62340)
+```
+
+**Solution 1: Increase budget**
+```json
+{
+  "temporal": {
+    "token_budget": 80000,
+    "token_budget_mode": "soft"
+  }
+}
+```
+
+**Solution 2: Reduce complexity**
+```json
+{
+  "entities": {"count": 3},  // Reduce from 5
+  "timepoints": {"count": 2}, // Reduce from 3
+  "outputs": {"include_dialogs": false}
+}
+```
+
+## Cost by Template Category
+
+### Quick Tier (less than $0.05)
+- `convergence/simple`
+
+### Standard Tier ($0.05-$0.20)
+- `board_meeting` - $0.05
+- `jefferson_dinner` - $0.05
+- `hospital_crisis` - $0.05
+- `detective_prospection` - $0.05
+- `kami_shrine` - $0.05
+- `vc_pitch_forward` - $0.08
+- `vc_pitch_branching` - $0.10
+- `sec_investigation` - $0.08
+- `agent1_regulatory_stress` - $0.08
+- `agent2_mission_failure` - $0.10
+- `agent3_litigation_discovery` - $0.06
+- `agent4_elk_migration` - $0.10
+
+### Comprehensive Tier ($0.20-$1.00)
+- `vc_pitch_roadshow` - $0.20
+- `hound_shadow_directorial` - $0.25
+- `mars_mission_portal` - $0.40
+- `agent3_litigation_portal` - $0.40
+- `castaway_colony_branching` - $1.50 (pending)
+
+## Next Steps
+
+- Learn about [Model Selection (M18)](/mechanisms/m18) for detailed model selector behavior
+- Read [Training Data](/guides/training-data) to understand licensing considerations
+- Explore [Templates](/guides/templates) to configure fidelity settings
