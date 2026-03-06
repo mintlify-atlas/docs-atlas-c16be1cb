@@ -1,0 +1,180 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "Timepoint Pro",
+  "projectDescription": "SNAG-powered temporal simulation engine for synthetic time travel through social networks with causal provenance",
+  "theme": "aspen",
+  "primaryColor": "#7c7c7c",
+  "lightColor": "#c7c7c7",
+  "darkColor": "#0a0a0a",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation",
+              "first-simulation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/snag",
+              "concepts/temporal-modes",
+              "concepts/fidelity-management",
+              "concepts/knowledge-provenance",
+              "concepts/mechanisms"
+            ]
+          },
+          {
+            "group": "Temporal Modes",
+            "pages": [
+              "temporal-modes/forward",
+              "temporal-modes/portal",
+              "temporal-modes/branching",
+              "temporal-modes/cyclical",
+              "temporal-modes/directorial"
+            ]
+          },
+          {
+            "group": "Mechanisms",
+            "pages": [
+              "mechanisms/overview",
+              "mechanisms/fidelity-management",
+              "mechanisms/temporal-reasoning",
+              "mechanisms/knowledge-provenance",
+              "mechanisms/entity-simulation",
+              "mechanisms/infrastructure"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/templates",
+              "guides/dialog-synthesis",
+              "guides/training-data",
+              "guides/cost-optimization",
+              "guides/validation"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/mars-mission",
+              "examples/castaway-colony",
+              "examples/board-meeting",
+              "examples/custom-scenario"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "CLI Commands",
+            "pages": [
+              "cli/overview",
+              "cli/run",
+              "cli/train",
+              "cli/evaluate",
+              "cli/interactive"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api/overview",
+              "api/authentication",
+              "api/tensors",
+              "api/simulations",
+              "api/batch",
+              "api/search"
+            ]
+          },
+          {
+            "group": "Python API",
+            "pages": [
+              "python/orchestrator",
+              "python/llm-client",
+              "python/storage",
+              "python/workflows",
+              "python/schemas"
+            ]
+          },
+          {
+            "group": "Export Formats",
+            "pages": [
+              "export/tdf",
+              "export/jsonl",
+              "export/sqlite",
+              "export/fountain"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integration",
+        "groups": [
+          {
+            "group": "Timepoint Suite",
+            "pages": [
+              "integration/suite-overview",
+              "integration/flash",
+              "integration/clockchain",
+              "integration/snag-bench",
+              "integration/proteus"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/local",
+              "deployment/pro-cloud",
+              "deployment/railway",
+              "deployment/docker"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "SNAG (Social Network Augmented Generation) engine",
+    "Five temporal modes: FORWARD, PORTAL, BRANCHING, CYCLICAL, DIRECTORIAL",
+    "Heterogeneous fidelity resolution (TENSOR_ONLY to TRAINED)",
+    "Knowledge provenance tracking with exposure events",
+    "Per-character dialog synthesis with voice discipline",
+    "19 composable mechanisms for social simulation",
+    "Query-driven lazy resolution for cost optimization",
+    "Training data export in TDF, JSONL, SQLite, Fountain formats",
+    "FastAPI REST API with rate limiting and usage quotas",
+    "Convergence validation for causal graph reliability"
+  ],
+  "publicApiSurface": [
+    "./run.sh list - List all simulation templates",
+    "./run.sh run <template> - Execute simulation template",
+    "./run.sh run --category showcase - Run by category",
+    "cli.py - Hydra CLI with autopilot, train, evaluate, interactive modes",
+    "POST /api/simulations/submit - Submit simulation job",
+    "GET /api/simulations/{job_id} - Get simulation status",
+    "GET /api/data-export/{run_id} - Export simulation artifacts",
+    "GET /api/tensors/{entity_id} - Retrieve entity tensor",
+    "POST /api/search/semantic - Semantic search across entities",
+    "POST /api/batch/submit - Submit batch simulation",
+    "Orchestrator.run() - Main orchestration engine",
+    "LLMClient.from_hydra_config() - Centralized LLM service",
+    "GraphStore - SQLite persistence layer",
+    "create_entity_training_workflow() - LangGraph workflow factory",
+    "build_temporal_chain() - Temporal chain builder",
+    "QueryInterface.query() - Natural language query interface",
+    "Validator.validate_all() - Comprehensive validation suite",
+    "PortalStrategy.run() - Backward reasoning from target state",
+    "BranchingStrategy.run() - Counterfactual timeline generation",
+    "TensorCompressor.compress() - TTM tensor compression"
+  ]
+}
